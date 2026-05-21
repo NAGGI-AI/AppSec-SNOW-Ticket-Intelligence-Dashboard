@@ -1,0 +1,12 @@
+[global]
+developmentMode = false
+
+[client]
+toolbarMode = "minimal"
+showErrorDetails = false
+
+[browser]
+gatherUsageStats = false
+
+[server]
+headless = true
