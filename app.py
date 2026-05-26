@@ -937,7 +937,182 @@ def page_overview(df: pd.DataFrame):
         pcols = [PRIORITY_COLORS.get(p, NEON_BLUE) for p in prio_counts.index]
         st.plotly_chart(donut(prio_counts, "Tickets by Priority", colors=pcols), use_container_width=True)
 
-# ─── Page: Workload Distribution (removed) ────────────────────────────────────
+# ─── Page: Workload Distribution ─────────────────────────────────────────────
+
+def page_workload(df: pd.DataFrame):
+    st.markdown(page_banner(
+        "Workload Distribution",
+        "Engineer assignment breakdown by status and severity — filtered by Assigned Group",
+        NEON_PURPLE), unsafe_allow_html=True)
+
+    # ── Group filter ──────────────────────────────────────────────────────────
+    all_groups = sorted(df["Primary Group"].replace("Unassigned", float("nan")).dropna().unique())
+    selected_group = st.selectbox("Filter by Assigned Group", ["All Groups"] + all_groups, key="wl_group")
+
+    if selected_group == "All Groups":
+        wdf = df[df["Assigned To Clean"] != ""].copy()
+    else:
+        wdf = df[(df["Primary Group"] == selected_group) & (df["Assigned To Clean"] != "")].copy()
+
+    if wdf.empty:
+        st.markdown('<div class="warn-panel">No assigned tickets found for this group.</div>',
+                    unsafe_allow_html=True)
+        return
+
+    # KPIs
+    total_eng    = wdf["Assigned To Clean"].nunique()
+    total_tickets = len(wdf)
+    open_tickets  = int((wdf["State"].isin(["Pending for Review", "Sent for Clarification"])).sum())
+    high_sev      = int((wdf["Priority"].isin(["Critical", "High"])).sum())
+
+    render_kpis([
+        (f"{total_tickets:,}", "Total Assigned",   NEON_PURPLE, "📋", f"across {total_eng} engineers"),
+        (f"{total_eng:,}",     "Active Engineers",  NEON_BLUE,   "👷", "with open tickets"),
+        (f"{open_tickets:,}",  "Open Issues",       NEON_ORANGE, "🕐", "Pending / Clarification"),
+        (f"{high_sev:,}",      "High/Critical",     NEON_RED,    "🚨", "needs attention"),
+    ])
+
+    # ── Grouped Bar: Engineer vs Ticket Count by Status ───────────────────────
+    st.markdown(section_hdr("Engineer Workload by Status", "📊"), unsafe_allow_html=True)
+
+    status_order  = ["Pending for Review", "Sent for Clarification", "Rejected", "Closed"]
+    status_colors = [NEON_ORANGE, NEON_BLUE, NEON_RED, NEON_GREEN]
+
+    eng_status = (wdf.groupby(["Assigned To Clean", "State"])
+                     .size()
+                     .reset_index(name="Count"))
+
+    # Top 15 engineers by total tickets
+    top_engs = (wdf.groupby("Assigned To Clean").size()
+                   .sort_values(ascending=False)
+                   .head(15).index.tolist())
+    eng_status = eng_status[eng_status["Assigned To Clean"].isin(top_engs)]
+
+    fig_bar = go.Figure()
+    for status, color in zip(status_order, status_colors):
+        s = eng_status[eng_status["State"] == status]
+        # Align to top_engs order
+        counts = {row["Assigned To Clean"]: row["Count"] for _, row in s.iterrows()}
+        y_vals = [counts.get(e, 0) for e in top_engs]
+        fig_bar.add_trace(go.Bar(
+            name=status,
+            x=top_engs,
+            y=y_vals,
+            marker_color=color,
+            opacity=0.85,
+            text=[v if v > 0 else "" for v in y_vals],
+            textposition="inside",
+            textfont=dict(color="#ffffff", size=10),
+        ))
+
+    fig_bar.update_layout(
+        title="Engineer vs Ticket Count (split by Status)",
+        barmode="group",
+        xaxis_tickangle=-35,
+        **_layout(height=420),
+    )
+    st.plotly_chart(fig_bar, use_container_width=True)
+
+    # ── Heatmap: Engineer vs Severity ────────────────────────────────────────
+    st.markdown(section_hdr("Engineer vs Severity Heatmap", "🔥"), unsafe_allow_html=True)
+
+    sev_order = ["Critical", "High", "Medium", "Low"]
+    heatmap_data = (wdf[wdf["Assigned To Clean"].isin(top_engs)]
+                       .groupby(["Assigned To Clean", "Priority"])
+                       .size()
+                       .reset_index(name="Count"))
+
+    # Build z-matrix: rows = engineers, cols = severity
+    z_matrix = []
+    for eng in top_engs:
+        row_counts = {}
+        for _, r in heatmap_data[heatmap_data["Assigned To Clean"] == eng].iterrows():
+            row_counts[r["Priority"]] = r["Count"]
+        z_matrix.append([row_counts.get(sev, 0) for sev in sev_order])
+
+    # Shorten long engineer names for display
+    def short_name(name, max_len=22):
+        return name if len(name) <= max_len else name[:max_len] + "…"
+
+    y_labels = [short_name(e) for e in top_engs]
+
+    fig_heat = go.Figure(go.Heatmap(
+        z=z_matrix,
+        x=sev_order,
+        y=y_labels,
+        colorscale=[
+            [0.0,  "rgba(13,21,38,1)"],
+            [0.3,  "rgba(0,212,255,0.35)"],
+            [0.65, "rgba(180,79,255,0.7)"],
+            [1.0,  "rgba(255,75,110,1)"],
+        ],
+        text=[[str(v) if v > 0 else "" for v in row] for row in z_matrix],
+        texttemplate="%{text}",
+        textfont=dict(color="#ffffff", size=11),
+        hovertemplate="Engineer: %{y}<br>Severity: %{x}<br>Tickets: %{z}<extra></extra>",
+        showscale=True,
+        colorbar=dict(
+            title=dict(text="Tickets", font=dict(color="#8892b0", size=11)),
+            tickfont=dict(color="#8892b0"),
+            bgcolor="rgba(0,0,0,0)",
+            bordercolor="rgba(0,212,255,0.2)",
+        ),
+    ))
+    fig_heat.update_layout(
+        title="Engineer vs Severity — Ticket Intensity",
+        xaxis=dict(side="top", tickfont=dict(color="#cdd6f4", size=12)),
+        yaxis=dict(autorange="reversed", tickfont=dict(color="#cdd6f4", size=11)),
+        **_layout(height=max(340, len(top_engs) * 32 + 100)),
+    )
+    st.plotly_chart(fig_heat, use_container_width=True)
+
+    # ── Summary Table ─────────────────────────────────────────────────────────
+    st.markdown(section_hdr("Engineer Summary Table", "📋"), unsafe_allow_html=True)
+
+    summary = (wdf.groupby("Assigned To Clean")
+                  .agg(
+                      Total_Assigned=("Request ID", "count"),
+                      Open_Issues=("State", lambda x: (x.isin(["Pending for Review", "Sent for Clarification"])).sum()),
+                      High_Severity=("Priority", lambda x: (x.isin(["Critical", "High"])).sum()),
+                      SLA_Breached=("SLA Breached", "sum"),
+                  )
+                  .reset_index()
+                  .rename(columns={
+                      "Assigned To Clean": "Engineer",
+                      "Total_Assigned": "Total Assigned",
+                      "Open_Issues": "Open Issues",
+                      "High_Severity": "High/Critical",
+                      "SLA_Breached": "SLA Breached",
+                  })
+                  .sort_values("Total Assigned", ascending=False)
+                  .reset_index(drop=True))
+
+    # Workload badge
+    def workload_label(n):
+        if n <= 5:  return "Optimal"
+        if n <= 10: return "Moderate"
+        return "Overloaded"
+
+    summary["Workload"] = summary["Total Assigned"].apply(workload_label)
+
+    st.dataframe(
+        summary,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Total Assigned": st.column_config.NumberColumn(format="%d"),
+            "Open Issues":    st.column_config.NumberColumn(format="%d"),
+            "High/Critical":  st.column_config.NumberColumn(format="%d"),
+            "SLA Breached":   st.column_config.NumberColumn(format="%d"),
+        },
+    )
+
+    buf = io.StringIO()
+    summary.to_csv(buf, index=False)
+    st.download_button(
+        "Export Summary CSV", buf.getvalue(),
+        f"workload_summary_{datetime.now().strftime('%Y%m%d_%H%M')}.csv", "text/csv",
+        key="wl_export")
 
 
 # ─── Page: Unassigned Queue ────────────────────────────────────────────────────
@@ -1202,6 +1377,7 @@ def render_sidebar():
 
         page = st.radio("Navigation", [
             "Overview",
+            "Workload Distribution",
             "Unassigned Queue",
             "Ticket Tracker",
             "SLA & Analytics",
@@ -1353,12 +1529,13 @@ def main():
             unsafe_allow_html=True)
 
         features = [
-            (NEON_BLUE,   "📊", "Operations Overview", "KPI metrics, state distribution, request type breakdown and group analysis"),
-            (NEON_ORANGE, "📭", "Unassigned Queue",    "Prioritised triage view with one-click ticket assignment"),
-            (NEON_GREEN,  "🔍", "Ticket Tracker",      "Full searchable registry with filters, CSV export and inline state updates"),
-            (NEON_RED,    "📈", "SLA & Analytics",     "Breach rates, resolution trends and compliance by priority and type"),
+            (NEON_BLUE,   "📊", "Operations Overview",      "KPI metrics, state distribution, request type breakdown and group analysis"),
+            (NEON_PURPLE, "👷", "Workload Distribution",    "Engineer workload bar chart, severity heatmap, and summary table by group"),
+            (NEON_ORANGE, "📭", "Unassigned Queue",         "Prioritised triage view with one-click ticket assignment"),
+            (NEON_GREEN,  "🔍", "Ticket Tracker",           "Full searchable registry with filters, CSV export and inline state updates"),
+            (NEON_RED,    "📈", "SLA & Analytics",          "Breach rates, resolution trends and compliance by priority and type"),
         ]
-        feat_cols = st.columns(4)
+        feat_cols = st.columns(5)
         for i, (color, icon, title, desc) in enumerate(features):
             with feat_cols[i]:
                 st.markdown(
@@ -1393,10 +1570,11 @@ def main():
         st.error("Loaded dataset is empty. Please check your CSV file.")
         return
 
-    if   page == "Overview":         page_overview(df)
-    elif page == "Unassigned Queue": page_unassigned(df)
-    elif page == "Ticket Tracker":   page_tracker(df)
-    elif page == "SLA & Analytics":  page_analytics(df)
+    if   page == "Overview":               page_overview(df)
+    elif page == "Workload Distribution":  page_workload(df)
+    elif page == "Unassigned Queue":       page_unassigned(df)
+    elif page == "Ticket Tracker":         page_tracker(df)
+    elif page == "SLA & Analytics":        page_analytics(df)
 
 
 if __name__ == "__main__":

@@ -22,10 +22,23 @@ A futuristic dark-theme Streamlit dashboard for Application Security workload ma
 
 ## Setup
 
+### Local (Windows)
+
+```bat
+pip install -r requirements.txt
+start.bat
+```
+
+> Use `start.bat` to launch and `stop.bat` to shut down the app.
+
+### GitHub Codespace / Linux
+
 ```bash
 pip install -r requirements.txt
-streamlit run app.py
+python -m streamlit run app.py
 ```
+
+> `streamlit` may not be on PATH in some environments — always use `python -m streamlit run app.py`.
 
 ## Data
 
@@ -40,6 +53,14 @@ Expected CSV columns:
 
 ## Deployment
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io)
+### Option 1 — GitHub Codespace (Recommended for sharing)
+1. Open this repo in a Codespace
+2. Run `python -m streamlit run app.py` in the terminal
+3. Go to the **Ports** tab → right-click port `8501` → **Port Visibility → Public**
+4. Share the generated `*.app.github.dev` URL
 
-Deploy for free on [Streamlit Community Cloud](https://share.streamlit.io) by connecting this GitHub repository.
+### Option 2 — Local Windows
+Use the included `start.bat` / `stop.bat` scripts. App runs at `http://localhost:8501`.
+
+### Option 3 — Streamlit Community Cloud *(if allowed by your org)*
+Connect this GitHub repository at [share.streamlit.io](https://share.streamlit.io) and deploy `app.py` from the `main` branch.
