@@ -972,31 +972,29 @@ def page_workload(df: pd.DataFrame):
         (f"{high_sev:,}",      "High/Critical",     NEON_RED,    "🚨", "needs attention"),
     ])
 
-    # ── Grouped Bar: Engineer vs Ticket Count by Status ───────────────────────
+    # ── Grouped Bar: All Engineers vs Ticket Count by Status ─────────────────
     st.markdown(section_hdr("Engineer Workload by Status", "📊"), unsafe_allow_html=True)
 
     status_order  = ["Pending for Review", "Sent for Clarification", "Rejected", "Closed"]
     status_colors = [NEON_ORANGE, NEON_BLUE, NEON_RED, NEON_GREEN]
 
+    # All engineers sorted by total ticket count descending
+    all_engs = (wdf.groupby("Assigned To Clean").size()
+                   .sort_values(ascending=False)
+                   .index.tolist())
+
     eng_status = (wdf.groupby(["Assigned To Clean", "State"])
                      .size()
                      .reset_index(name="Count"))
 
-    # Top 15 engineers by total tickets
-    top_engs = (wdf.groupby("Assigned To Clean").size()
-                   .sort_values(ascending=False)
-                   .head(15).index.tolist())
-    eng_status = eng_status[eng_status["Assigned To Clean"].isin(top_engs)]
-
     fig_bar = go.Figure()
     for status, color in zip(status_order, status_colors):
         s = eng_status[eng_status["State"] == status]
-        # Align to top_engs order
         counts = {row["Assigned To Clean"]: row["Count"] for _, row in s.iterrows()}
-        y_vals = [counts.get(e, 0) for e in top_engs]
+        y_vals = [counts.get(e, 0) for e in all_engs]
         fig_bar.add_trace(go.Bar(
             name=status,
-            x=top_engs,
+            x=all_engs,
             y=y_vals,
             marker_color=color,
             opacity=0.85,
@@ -1006,10 +1004,10 @@ def page_workload(df: pd.DataFrame):
         ))
 
     fig_bar.update_layout(
-        title="Engineer vs Ticket Count (split by Status)",
+        title="All Engineers — Ticket Count split by Status",
         barmode="group",
-        xaxis_tickangle=-35,
-        **_layout(height=420),
+        xaxis_tickangle=-40,
+        **_layout(height=max(420, len(all_engs) * 18 + 120)),
     )
     st.plotly_chart(fig_bar, use_container_width=True)
 
@@ -1017,27 +1015,27 @@ def page_workload(df: pd.DataFrame):
     st.markdown(section_hdr("Engineer vs Severity Heatmap", "🔥"), unsafe_allow_html=True)
 
     sev_order = ["Critical", "High", "Medium", "Low"]
-    heatmap_data = (wdf[wdf["Assigned To Clean"].isin(top_engs)]
-                       .groupby(["Assigned To Clean", "Priority"])
-                       .size()
-                       .reset_index(name="Count"))
 
-    # Build z-matrix: rows = engineers, cols = severity
-    z_matrix = []
-    for eng in top_engs:
-        row_counts = {}
-        for _, r in heatmap_data[heatmap_data["Assigned To Clean"] == eng].iterrows():
-            row_counts[r["Priority"]] = r["Count"]
-        z_matrix.append([row_counts.get(sev, 0) for sev in sev_order])
-
-    # Shorten long engineer names for display
     def short_name(name, max_len=22):
         return name if len(name) <= max_len else name[:max_len] + "…"
 
-    y_labels = [short_name(e) for e in top_engs]
+    heatmap_data = (wdf.groupby(["Assigned To Clean", "Priority"])
+                       .size()
+                       .reset_index(name="Count"))
+
+    # Build z-matrix top-to-bottom = highest workload first; reverse for display
+    z_matrix = []
+    for eng in all_engs:
+        row_counts = {r["Priority"]: r["Count"]
+                      for _, r in heatmap_data[heatmap_data["Assigned To Clean"] == eng].iterrows()}
+        z_matrix.append([row_counts.get(sev, 0) for sev in sev_order])
+
+    # Reverse so highest-workload engineer appears at top of heatmap
+    y_labels  = [short_name(e) for e in reversed(all_engs)]
+    z_display = list(reversed(z_matrix))
 
     fig_heat = go.Figure(go.Heatmap(
-        z=z_matrix,
+        z=z_display,
         x=sev_order,
         y=y_labels,
         colorscale=[
@@ -1046,13 +1044,13 @@ def page_workload(df: pd.DataFrame):
             [0.65, "rgba(180,79,255,0.7)"],
             [1.0,  "rgba(255,75,110,1)"],
         ],
-        text=[[str(v) if v > 0 else "" for v in row] for row in z_matrix],
+        text=[[str(v) if v > 0 else "" for v in row] for row in z_display],
         texttemplate="%{text}",
         textfont=dict(color="#ffffff", size=11),
         hovertemplate="Engineer: %{y}<br>Severity: %{x}<br>Tickets: %{z}<extra></extra>",
         showscale=True,
         colorbar=dict(
-            title=dict(text="Tickets", font=dict(color="#8892b0", size=11)),
+            title="Tickets",
             tickfont=dict(color="#8892b0"),
             bgcolor="rgba(0,0,0,0)",
             bordercolor="rgba(0,212,255,0.2)",
@@ -1061,8 +1059,8 @@ def page_workload(df: pd.DataFrame):
     fig_heat.update_layout(
         title="Engineer vs Severity — Ticket Intensity",
         xaxis=dict(side="top", tickfont=dict(color="#cdd6f4", size=12)),
-        yaxis=dict(autorange="reversed", tickfont=dict(color="#cdd6f4", size=11)),
-        **_layout(height=max(340, len(top_engs) * 32 + 100)),
+        yaxis=dict(tickfont=dict(color="#cdd6f4", size=11)),
+        **_layout(height=max(340, len(all_engs) * 32 + 100)),
     )
     st.plotly_chart(fig_heat, use_container_width=True)
 
