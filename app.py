@@ -1011,58 +1011,43 @@ def page_workload(df: pd.DataFrame):
     )
     st.plotly_chart(fig_bar, use_container_width=True)
 
-    # ── Heatmap: Engineer vs Severity ────────────────────────────────────────
-    st.markdown(section_hdr("Engineer vs Severity Heatmap", "🔥"), unsafe_allow_html=True)
+    # ── Severity Breakdown: Horizontal Stacked Bar ────────────────────────────
+    st.markdown(section_hdr("Engineer vs Severity Breakdown", "🔥"), unsafe_allow_html=True)
 
-    sev_order = ["Critical", "High", "Medium", "Low"]
+    sev_order  = ["Critical", "High", "Medium", "Low"]
+    sev_colors = [NEON_RED, NEON_ORANGE, NEON_BLUE, NEON_GREEN]
 
-    def short_name(name, max_len=22):
-        return name if len(name) <= max_len else name[:max_len] + "…"
+    sev_data = (wdf.groupby(["Assigned To Clean", "Priority"])
+                   .size()
+                   .reset_index(name="Count"))
 
-    heatmap_data = (wdf.groupby(["Assigned To Clean", "Priority"])
-                       .size()
-                       .reset_index(name="Count"))
+    # Engineers displayed bottom-to-top (highest workload at top in horizontal bar)
+    y_engs = list(reversed(all_engs))
 
-    # Build z-matrix top-to-bottom = highest workload first; reverse for display
-    z_matrix = []
-    for eng in all_engs:
-        row_counts = {r["Priority"]: r["Count"]
-                      for _, r in heatmap_data[heatmap_data["Assigned To Clean"] == eng].iterrows()}
-        z_matrix.append([row_counts.get(sev, 0) for sev in sev_order])
+    fig_sev = go.Figure()
+    for sev, color in zip(sev_order, sev_colors):
+        s = sev_data[sev_data["Priority"] == sev]
+        counts_map = dict(zip(s["Assigned To Clean"], s["Count"]))
+        x_vals = [counts_map.get(e, 0) for e in y_engs]
+        fig_sev.add_trace(go.Bar(
+            name=sev,
+            x=x_vals,
+            y=y_engs,
+            orientation="h",
+            marker_color=color,
+            opacity=0.85,
+            text=[str(v) if v > 0 else "" for v in x_vals],
+            textposition="inside",
+            textfont=dict(color="#ffffff", size=10),
+            hovertemplate=f"<b>%{{y}}</b><br>{sev}: %{{x}} tickets<extra></extra>",
+        ))
 
-    # Reverse so highest-workload engineer appears at top of heatmap
-    y_labels  = [short_name(e) for e in reversed(all_engs)]
-    z_display = list(reversed(z_matrix))
-
-    fig_heat = go.Figure(go.Heatmap(
-        z=z_display,
-        x=sev_order,
-        y=y_labels,
-        colorscale=[
-            [0.0,  "rgba(13,21,38,1)"],
-            [0.3,  "rgba(0,212,255,0.35)"],
-            [0.65, "rgba(180,79,255,0.7)"],
-            [1.0,  "rgba(255,75,110,1)"],
-        ],
-        text=[[str(v) if v > 0 else "" for v in row] for row in z_display],
-        texttemplate="%{text}",
-        textfont=dict(color="#ffffff", size=11),
-        hovertemplate="Engineer: %{y}<br>Severity: %{x}<br>Tickets: %{z}<extra></extra>",
-        showscale=True,
-        colorbar=dict(
-            title="Tickets",
-            tickfont=dict(color="#8892b0"),
-            bgcolor="rgba(0,0,0,0)",
-            bordercolor="rgba(0,212,255,0.2)",
-        ),
-    ))
-    fig_heat.update_layout(
-        title="Engineer vs Severity — Ticket Intensity",
-        xaxis=dict(side="top", tickfont=dict(color="#cdd6f4", size=12)),
-        yaxis=dict(tickfont=dict(color="#cdd6f4", size=11)),
-        **_layout(height=max(340, len(all_engs) * 32 + 100)),
+    fig_sev.update_layout(
+        title="Engineer Severity Breakdown (Critical / High / Medium / Low)",
+        barmode="stack",
+        **_layout(height=max(400, len(all_engs) * 28 + 80)),
     )
-    st.plotly_chart(fig_heat, use_container_width=True)
+    st.plotly_chart(fig_sev, use_container_width=True)
 
     # ── Summary Table ─────────────────────────────────────────────────────────
     st.markdown(section_hdr("Engineer Summary Table", "📋"), unsafe_allow_html=True)
