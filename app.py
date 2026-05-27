@@ -945,14 +945,26 @@ def page_workload(df: pd.DataFrame):
         "Engineer assignment breakdown by status and severity — filtered by Assigned Group",
         NEON_PURPLE), unsafe_allow_html=True)
 
-    # ── Group filter ──────────────────────────────────────────────────────────
-    all_groups = sorted(df["Primary Group"].replace("Unassigned", float("nan")).dropna().unique())
+    # ── Group filter — each engineer locked to their dominant group ───────────
+    assigned = df[df["Assigned To Clean"] != ""].copy()
+    # Determine dominant group per engineer (most frequently appearing Primary Group)
+    dominant = (assigned.groupby(["Assigned To Clean", "Primary Group"])
+                        .size()
+                        .reset_index(name="n")
+                        .sort_values("n", ascending=False)
+                        .drop_duplicates("Assigned To Clean")
+                        .set_index("Assigned To Clean")["Primary Group"])
+    assigned["Dominant Group"] = assigned["Assigned To Clean"].map(dominant)
+
+    all_groups = sorted(dominant.unique())
+    all_groups = [g for g in all_groups if g != "Unassigned"]
     selected_group = st.selectbox("Filter by Assigned Group", ["All Groups"] + all_groups, key="wl_group")
 
     if selected_group == "All Groups":
-        wdf = df[df["Assigned To Clean"] != ""].copy()
+        wdf = assigned.copy()
     else:
-        wdf = df[(df["Primary Group"] == selected_group) & (df["Assigned To Clean"] != "")].copy()
+        # Only include engineers whose dominant group matches selection
+        wdf = assigned[assigned["Dominant Group"] == selected_group].copy()
 
     if wdf.empty:
         st.markdown('<div class="warn-panel">No assigned tickets found for this group.</div>',
@@ -1011,44 +1023,6 @@ def page_workload(df: pd.DataFrame):
     )
     st.plotly_chart(fig_bar, use_container_width=True)
 
-    # ── Severity Breakdown: Horizontal Stacked Bar ────────────────────────────
-    st.markdown(section_hdr("Engineer vs Severity Breakdown", "🔥"), unsafe_allow_html=True)
-
-    sev_order  = ["Critical", "High", "Medium", "Low"]
-    sev_colors = [NEON_RED, NEON_ORANGE, NEON_BLUE, NEON_GREEN]
-
-    sev_data = (wdf.groupby(["Assigned To Clean", "Priority"])
-                   .size()
-                   .reset_index(name="Count"))
-
-    # Engineers displayed bottom-to-top (highest workload at top in horizontal bar)
-    y_engs = list(reversed(all_engs))
-
-    fig_sev = go.Figure()
-    for sev, color in zip(sev_order, sev_colors):
-        s = sev_data[sev_data["Priority"] == sev]
-        counts_map = dict(zip(s["Assigned To Clean"], s["Count"]))
-        x_vals = [counts_map.get(e, 0) for e in y_engs]
-        fig_sev.add_trace(go.Bar(
-            name=sev,
-            x=x_vals,
-            y=y_engs,
-            orientation="h",
-            marker_color=color,
-            opacity=0.85,
-            text=[str(v) if v > 0 else "" for v in x_vals],
-            textposition="inside",
-            textfont=dict(color="#ffffff", size=10),
-            hovertemplate=f"<b>%{{y}}</b><br>{sev}: %{{x}} tickets<extra></extra>",
-        ))
-
-    fig_sev.update_layout(
-        title="Engineer Severity Breakdown (Critical / High / Medium / Low)",
-        barmode="stack",
-        **_layout(height=max(400, len(all_engs) * 28 + 80)),
-    )
-    st.plotly_chart(fig_sev, use_container_width=True)
-
     # ── Summary Table ─────────────────────────────────────────────────────────
     st.markdown(section_hdr("Engineer Summary Table", "📋"), unsafe_allow_html=True)
 
@@ -1056,21 +1030,19 @@ def page_workload(df: pd.DataFrame):
                   .agg(
                       Total_Assigned=("Request ID", "count"),
                       Open_Issues=("State", lambda x: (x.isin(["Pending for Review", "Sent for Clarification"])).sum()),
-                      High_Severity=("Priority", lambda x: (x.isin(["Critical", "High"])).sum()),
-                      SLA_Breached=("SLA Breached", "sum"),
                   )
                   .reset_index()
                   .rename(columns={
                       "Assigned To Clean": "Engineer",
-                      "Total_Assigned": "Total Assigned",
-                      "Open_Issues": "Open Issues",
-                      "High_Severity": "High/Critical",
-                      "SLA_Breached": "SLA Breached",
+                      "Total_Assigned":    "Total Assigned",
+                      "Open_Issues":       "Open Issues",
                   })
                   .sort_values("Total Assigned", ascending=False)
                   .reset_index(drop=True))
 
-    # Workload badge
+    # Add dominant group column
+    summary["Assigned Group"] = summary["Engineer"].map(dominant)
+
     def workload_label(n):
         if n <= 5:  return "Optimal"
         if n <= 10: return "Moderate"
@@ -1079,14 +1051,12 @@ def page_workload(df: pd.DataFrame):
     summary["Workload"] = summary["Total Assigned"].apply(workload_label)
 
     st.dataframe(
-        summary,
+        summary[["Engineer", "Assigned Group", "Total Assigned", "Open Issues", "Workload"]],
         use_container_width=True,
         hide_index=True,
         column_config={
             "Total Assigned": st.column_config.NumberColumn(format="%d"),
             "Open Issues":    st.column_config.NumberColumn(format="%d"),
-            "High/Critical":  st.column_config.NumberColumn(format="%d"),
-            "SLA Breached":   st.column_config.NumberColumn(format="%d"),
         },
     )
 
