@@ -924,18 +924,10 @@ def page_overview(df: pd.DataFrame):
         type_counts = df["Request Type"].value_counts().head(10)
         st.plotly_chart(horizontal_bar(type_counts, "Tickets by Request Type"), use_container_width=True)
 
-    st.markdown(section_hdr("Group Distribution & Priority Breakdown"), unsafe_allow_html=True)
+    st.markdown(section_hdr("Group Distribution"), unsafe_allow_html=True)
 
-    c3, c4 = st.columns([1, 1])
-    with c3:
-        grp_counts = df["Primary Group"].value_counts().head(8)
-        st.plotly_chart(vertical_bar(grp_counts, "Tickets by Assigned Group"), use_container_width=True)
-    with c4:
-        prio_counts = df["Priority"].value_counts()
-        prio_order  = ["Critical", "High", "Medium", "Low"]
-        prio_counts = prio_counts.reindex([p for p in prio_order if p in prio_counts.index])
-        pcols = [PRIORITY_COLORS.get(p, NEON_BLUE) for p in prio_counts.index]
-        st.plotly_chart(donut(prio_counts, "Tickets by Priority", colors=pcols), use_container_width=True)
+    grp_counts = df["Primary Group"].value_counts().head(8)
+    st.plotly_chart(vertical_bar(grp_counts, "Tickets by Assigned Group"), use_container_width=True)
 
 # ─── Page: Workload Distribution ─────────────────────────────────────────────
 
@@ -945,26 +937,14 @@ def page_workload(df: pd.DataFrame):
         "Engineer assignment breakdown by status and severity — filtered by Assigned Group",
         NEON_PURPLE), unsafe_allow_html=True)
 
-    # ── Group filter — each engineer locked to their dominant group ───────────
-    assigned = df[df["Assigned To Clean"] != ""].copy()
-    # Determine dominant group per engineer (most frequently appearing Primary Group)
-    dominant = (assigned.groupby(["Assigned To Clean", "Primary Group"])
-                        .size()
-                        .reset_index(name="n")
-                        .sort_values("n", ascending=False)
-                        .drop_duplicates("Assigned To Clean")
-                        .set_index("Assigned To Clean")["Primary Group"])
-    assigned["Dominant Group"] = assigned["Assigned To Clean"].map(dominant)
-
-    all_groups = sorted(dominant.unique())
-    all_groups = [g for g in all_groups if g != "Unassigned"]
+    # ── Group filter ──────────────────────────────────────────────────────────
+    all_groups = sorted(df["Primary Group"].replace("Unassigned", float("nan")).dropna().unique())
     selected_group = st.selectbox("Filter by Assigned Group", ["All Groups"] + all_groups, key="wl_group")
 
     if selected_group == "All Groups":
-        wdf = assigned.copy()
+        wdf = df[df["Assigned To Clean"] != ""].copy()
     else:
-        # Only include engineers whose dominant group matches selection
-        wdf = assigned[assigned["Dominant Group"] == selected_group].copy()
+        wdf = df[(df["Primary Group"] == selected_group) & (df["Assigned To Clean"] != "")].copy()
 
     if wdf.empty:
         st.markdown('<div class="warn-panel">No assigned tickets found for this group.</div>',
@@ -1026,6 +1006,13 @@ def page_workload(df: pd.DataFrame):
     # ── Summary Table ─────────────────────────────────────────────────────────
     st.markdown(section_hdr("Engineer Summary Table", "📋"), unsafe_allow_html=True)
 
+    # Primary group per engineer within current filtered scope
+    eng_group = (wdf.groupby(["Assigned To Clean", "Primary Group"])
+                    .size().reset_index(name="n")
+                    .sort_values("n", ascending=False)
+                    .drop_duplicates("Assigned To Clean")
+                    .set_index("Assigned To Clean")["Primary Group"])
+
     summary = (wdf.groupby("Assigned To Clean")
                   .agg(
                       Total_Assigned=("Request ID", "count"),
@@ -1040,8 +1027,7 @@ def page_workload(df: pd.DataFrame):
                   .sort_values("Total Assigned", ascending=False)
                   .reset_index(drop=True))
 
-    # Add dominant group column
-    summary["Assigned Group"] = summary["Engineer"].map(dominant)
+    summary["Assigned Group"] = summary["Engineer"].map(eng_group)
 
     def workload_label(n):
         if n <= 5:  return "Optimal"
