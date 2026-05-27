@@ -938,28 +938,26 @@ def page_workload(df: pd.DataFrame):
         NEON_PURPLE), unsafe_allow_html=True)
 
     # ── Group filter ──────────────────────────────────────────────────────────
-    # Each engineer is assigned to exactly ONE home group (the group with the
-    # most tickets for that engineer). This prevents engineers from bleeding
-    # across groups (e.g. an ITIT-ITSSDLC engineer won't appear under
-    # ITIT-CSAppSec and vice versa).
-    _assigned = df[df["Assigned To Clean"] != ""].copy()
-    _home = (_assigned.groupby(["Assigned To Clean", "Primary Group"])
-                      .size()
-                      .reset_index(name="_n")
-                      .sort_values("_n", ascending=False)
-                      .drop_duplicates("Assigned To Clean")
-                      .set_index("Assigned To Clean")["Primary Group"])
-    _assigned["Home Group"] = _assigned["Assigned To Clean"].map(_home)
-
-    all_groups = sorted(g for g in _home.unique() if g != "Unassigned")
+    all_groups = sorted(df["Primary Group"].replace("Unassigned", float("nan")).dropna().unique())
     selected_group = st.selectbox("Filter by Assigned Group", ["All Groups"] + all_groups, key="wl_group")
 
+    # Engineers who belong to ITIT-ITSSDLC must never appear under ITIT-CSAppSec
+    ITSSDLC_GROUP  = "ITIT-ITSSDLC-Global-Support-L1"
+    CSAPPSEC_GROUP = "ITIT-CSAppSec-Global-Support-L1"
+    itssdlc_engs = set(
+        df[(df["Primary Group"] == ITSSDLC_GROUP) & (df["Assigned To Clean"] != "")]["Assigned To Clean"].unique()
+    )
+
     if selected_group == "All Groups":
-        wdf = _assigned.copy()
+        wdf = df[df["Assigned To Clean"] != ""].copy()
+    elif selected_group == CSAPPSEC_GROUP:
+        wdf = df[
+            (df["Primary Group"] == CSAPPSEC_GROUP) &
+            (df["Assigned To Clean"] != "") &
+            (~df["Assigned To Clean"].isin(itssdlc_engs))
+        ].copy()
     else:
-        # Only include tickets for engineers whose home group is the selected group
-        home_engs = _home[_home == selected_group].index
-        wdf = _assigned[_assigned["Assigned To Clean"].isin(home_engs)].copy()
+        wdf = df[(df["Primary Group"] == selected_group) & (df["Assigned To Clean"] != "")].copy()
 
     if wdf.empty:
         st.markdown('<div class="warn-panel">No assigned tickets found for this group.</div>',
@@ -1021,8 +1019,11 @@ def page_workload(df: pd.DataFrame):
     # ── Summary Table ─────────────────────────────────────────────────────────
     st.markdown(section_hdr("Engineer Summary Table", "📋"), unsafe_allow_html=True)
 
-    # Use home group already computed above
-    eng_group = _home
+    eng_group = (wdf.groupby(["Assigned To Clean", "Primary Group"])
+                    .size().reset_index(name="_n")
+                    .sort_values("_n", ascending=False)
+                    .drop_duplicates("Assigned To Clean")
+                    .set_index("Assigned To Clean")["Primary Group"])
 
     summary = (wdf.groupby("Assigned To Clean")
                   .agg(
