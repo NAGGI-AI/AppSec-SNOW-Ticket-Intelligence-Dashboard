@@ -938,13 +938,28 @@ def page_workload(df: pd.DataFrame):
         NEON_PURPLE), unsafe_allow_html=True)
 
     # ── Group filter ──────────────────────────────────────────────────────────
-    all_groups = sorted(df["Primary Group"].replace("Unassigned", float("nan")).dropna().unique())
+    # Each engineer is assigned to exactly ONE home group (the group with the
+    # most tickets for that engineer). This prevents engineers from bleeding
+    # across groups (e.g. an ITIT-ITSSDLC engineer won't appear under
+    # ITIT-CSAppSec and vice versa).
+    _assigned = df[df["Assigned To Clean"] != ""].copy()
+    _home = (_assigned.groupby(["Assigned To Clean", "Primary Group"])
+                      .size()
+                      .reset_index(name="_n")
+                      .sort_values("_n", ascending=False)
+                      .drop_duplicates("Assigned To Clean")
+                      .set_index("Assigned To Clean")["Primary Group"])
+    _assigned["Home Group"] = _assigned["Assigned To Clean"].map(_home)
+
+    all_groups = sorted(g for g in _home.unique() if g != "Unassigned")
     selected_group = st.selectbox("Filter by Assigned Group", ["All Groups"] + all_groups, key="wl_group")
 
     if selected_group == "All Groups":
-        wdf = df[df["Assigned To Clean"] != ""].copy()
+        wdf = _assigned.copy()
     else:
-        wdf = df[(df["Primary Group"] == selected_group) & (df["Assigned To Clean"] != "")].copy()
+        # Only include tickets for engineers whose home group is the selected group
+        home_engs = _home[_home == selected_group].index
+        wdf = _assigned[_assigned["Assigned To Clean"].isin(home_engs)].copy()
 
     if wdf.empty:
         st.markdown('<div class="warn-panel">No assigned tickets found for this group.</div>',
@@ -1006,12 +1021,8 @@ def page_workload(df: pd.DataFrame):
     # ── Summary Table ─────────────────────────────────────────────────────────
     st.markdown(section_hdr("Engineer Summary Table", "📋"), unsafe_allow_html=True)
 
-    # Primary group per engineer within current filtered scope
-    eng_group = (wdf.groupby(["Assigned To Clean", "Primary Group"])
-                    .size().reset_index(name="n")
-                    .sort_values("n", ascending=False)
-                    .drop_duplicates("Assigned To Clean")
-                    .set_index("Assigned To Clean")["Primary Group"])
+    # Use home group already computed above
+    eng_group = _home
 
     summary = (wdf.groupby("Assigned To Clean")
                   .agg(
