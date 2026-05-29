@@ -10,8 +10,22 @@ import plotly.graph_objects as go
 import sqlite3
 import os
 import io
+import json
 import hashlib
 from datetime import datetime, timedelta
+
+# ─── Optional agent dependencies ──────────────────────────────────────────────
+try:
+    import anthropic as _anthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    ANTHROPIC_AVAILABLE = False
+
+try:
+    import requests as _requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
 
 # ─── CSV helper ───────────────────────────────────────────────────────────────
 
@@ -1315,6 +1329,639 @@ def page_analytics(df: pd.DataFrame):
 
 
 
+# ─── Agent helpers ────────────────────────────────────────────────────────────
+
+def _get_api_key() -> str:
+    """Resolve Anthropic API key: session state → env var → Streamlit secrets."""
+    if st.session_state.get("anthropic_api_key"):
+        return st.session_state["anthropic_api_key"]
+    key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not key:
+        try:
+            key = st.secrets.get("ANTHROPIC_API_KEY", "")
+        except Exception:
+            pass
+    return key
+
+
+def _build_data_context(df: pd.DataFrame) -> str:
+    """Build a compact plain-text summary of the dataframe for AI system prompts."""
+    total   = len(df)
+    pending = int((df["State"] == "Pending for Review").sum())
+    clarify = int((df["State"] == "Sent for Clarification").sum())
+    closed  = int((df["State"] == "Closed").sum())
+    rejected= int((df["State"] == "Rejected").sum())
+    unassigned = int((df["Assigned To Clean"] == "").sum())
+    breached   = int(df["SLA Breached"].sum())
+    breach_pct = breached / total * 100 if total else 0
+    avg_days   = df["Days Open"].mean()
+
+    # Top engineers by load
+    eng_load = (df[df["Assigned To Clean"] != ""]
+                .groupby("Assigned To Clean").size()
+                .sort_values(ascending=False).head(10))
+
+    # Request types
+    rt_counts = df["Request Type"].replace("", "Unknown").value_counts().head(8)
+
+    # Group distribution
+    grp_counts = df["Primary Group"].value_counts().head(6)
+
+    # SLA by priority
+    sla_df = df.groupby("Priority").agg(
+        Total=("Request ID", "count"),
+        Breached=("SLA Breached", "sum")
+    ).reindex(["Critical", "High", "Medium", "Low"]).fillna(0)
+
+    lines = [
+        f"=== AppSec ServiceNow Ticket Dashboard — Live Data Snapshot ({datetime.now().strftime('%d %b %Y %H:%M')}) ===",
+        "",
+        "## Summary",
+        f"- Total tickets: {total:,}",
+        f"- Pending for Review: {pending:,}",
+        f"- Sent for Clarification: {clarify:,}",
+        f"- Closed: {closed:,}",
+        f"- Rejected: {rejected:,}",
+        f"- Unassigned: {unassigned:,}",
+        f"- SLA Breached: {breached:,} ({breach_pct:.1f}%)",
+        f"- Average days open: {avg_days:.1f}",
+        "",
+        "## Engineer Workload (Top 10 by ticket count)",
+    ]
+    for eng, cnt in eng_load.items():
+        lines.append(f"  - {eng}: {cnt} tickets")
+
+    lines += ["", "## Request Type Breakdown"]
+    for rt, cnt in rt_counts.items():
+        lines.append(f"  - {rt}: {cnt}")
+
+    lines += ["", "## Group Distribution"]
+    for grp, cnt in grp_counts.items():
+        lines.append(f"  - {grp}: {cnt}")
+
+    lines += ["", "## SLA by Priority"]
+    for prio in ["Critical", "High", "Medium", "Low"]:
+        if prio in sla_df.index:
+            t = int(sla_df.loc[prio, "Total"])
+            b = int(sla_df.loc[prio, "Breached"])
+            pct = b / t * 100 if t else 0
+            lines.append(f"  - {prio}: {t} total, {b} breached ({pct:.0f}%)")
+
+    # Unassigned critical tickets
+    crit_unasgn = df[
+        (df["Assigned To Clean"] == "") & (df["Priority"] == "Critical")
+    ]["Request ID"].tolist()[:10]
+    if crit_unasgn:
+        lines += ["", f"## Unassigned Critical Tickets ({len(crit_unasgn)} shown)"]
+        for rid in crit_unasgn:
+            lines.append(f"  - {rid}")
+
+    return "\n".join(lines)
+
+
+# ─── Page: AI Copilot Chat ─────────────────────────────────────────────────────
+
+def page_copilot(df: pd.DataFrame):
+    st.markdown(page_banner(
+        "AI Copilot",
+        "Ask anything about your AppSec ticket pipeline — powered by Claude",
+        NEON_PURPLE), unsafe_allow_html=True)
+
+    if not ANTHROPIC_AVAILABLE:
+        st.markdown(
+            '<div class="alert-panel"><b>anthropic package not installed.</b><br>'
+            'Run: <code>pip install anthropic</code> then restart the app.</div>',
+            unsafe_allow_html=True)
+        return
+
+    # ── API key setup ──────────────────────────────────────────────────────────
+    api_key = _get_api_key()
+    if not api_key:
+        st.markdown(
+            '<div class="warn-panel">No Anthropic API key found. '
+            'Enter your key below, or set the <b>ANTHROPIC_API_KEY</b> environment variable.</div>',
+            unsafe_allow_html=True)
+        with st.form("api_key_form", clear_on_submit=False):
+            key_input = st.text_input(
+                "Anthropic API Key", type="password",
+                placeholder="sk-ant-...",
+                help="Get your key at console.anthropic.com")
+            if st.form_submit_button("Save Key"):
+                if key_input.startswith("sk-"):
+                    st.session_state["anthropic_api_key"] = key_input
+                    st.success("API key saved for this session.")
+                    st.rerun()
+                else:
+                    st.error("Key must start with 'sk-'")
+        return
+
+    # ── Init chat history ──────────────────────────────────────────────────────
+    if "copilot_messages" not in st.session_state:
+        st.session_state["copilot_messages"] = []
+
+    # Build system prompt once per session (or on data refresh)
+    if "copilot_context" not in st.session_state:
+        st.session_state["copilot_context"] = _build_data_context(df)
+
+    system_prompt = (
+        "You are the AppSec Operations Intelligence Copilot for a cybersecurity team. "
+        "You have deep expertise in Application Security, vulnerability management, "
+        "and security operations. You are concise, direct, and always ground your answers "
+        "in the live dashboard data provided below. When recommending engineer assignments, "
+        "consider current workload and ticket types. When discussing SLA, reference actual "
+        "breach numbers. Format responses in clean markdown — use bullet points and bold "
+        "for key figures. Never make up data not in the context.\n\n"
+        + st.session_state["copilot_context"]
+    )
+
+    # ── Render existing chat ───────────────────────────────────────────────────
+    for msg in st.session_state["copilot_messages"]:
+        with st.chat_message(msg["role"],
+                             avatar="🛡" if msg["role"] == "assistant" else "👤"):
+            st.markdown(msg["content"])
+
+    # ── Suggested prompts (shown only when chat is empty) ─────────────────────
+    if not st.session_state["copilot_messages"]:
+        st.markdown(section_hdr("Suggested Questions", ""), unsafe_allow_html=True)
+        suggestions = [
+            "Who has the lightest workload right now and can take a new Critical ticket?",
+            "Why are SLA breaches high? What should we do about it?",
+            "Summarize all unassigned tickets and suggest a triage plan.",
+            "Which request type has the worst SLA compliance?",
+            "Which engineer is most overloaded and what tickets can be redistributed?",
+        ]
+        cols = st.columns(2)
+        for i, s in enumerate(suggestions):
+            with cols[i % 2]:
+                if st.button(s, key=f"sug_{i}", use_container_width=True):
+                    st.session_state["copilot_messages"].append(
+                        {"role": "user", "content": s})
+                    st.rerun()
+
+    # ── Chat input ────────────────────────────────────────────────────────────
+    user_input = st.chat_input("Ask about your AppSec tickets...")
+
+    if user_input:
+        st.session_state["copilot_messages"].append(
+            {"role": "user", "content": user_input})
+
+        with st.chat_message("user", avatar="👤"):
+            st.markdown(user_input)
+
+        with st.chat_message("assistant", avatar="🛡"):
+            placeholder = st.empty()
+            full_response = ""
+
+            try:
+                client = _anthropic.Anthropic(api_key=api_key)
+                api_messages = [
+                    {"role": m["role"], "content": m["content"]}
+                    for m in st.session_state["copilot_messages"]
+                ]
+                with client.messages.stream(
+                    model="claude-sonnet-4-6",
+                    max_tokens=1024,
+                    system=system_prompt,
+                    messages=api_messages,
+                ) as stream:
+                    for chunk in stream.text_stream:
+                        full_response += chunk
+                        placeholder.markdown(full_response + "▌")
+                placeholder.markdown(full_response)
+                st.session_state["copilot_messages"].append(
+                    {"role": "assistant", "content": full_response})
+
+            except Exception as e:
+                err = str(e)
+                if "authentication" in err.lower() or "api_key" in err.lower():
+                    placeholder.error("Invalid API key. Please check your key in the setup section.")
+                    st.session_state.pop("anthropic_api_key", None)
+                    st.session_state.pop("copilot_context", None)
+                else:
+                    placeholder.error(f"Claude API error: {err}")
+
+    # ── Clear chat ─────────────────────────────────────────────────────────────
+    if st.session_state["copilot_messages"]:
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+        if st.button("Clear Chat", key="copilot_clear"):
+            st.session_state["copilot_messages"] = []
+            st.session_state.pop("copilot_context", None)
+            st.rerun()
+
+
+# ─── Page: Weekly Intelligence Briefing ───────────────────────────────────────
+
+def page_briefing(df: pd.DataFrame):
+    st.markdown(page_banner(
+        "Weekly Intelligence Briefing",
+        "AI-generated operational briefing grounded in live ticket data",
+        NEON_GREEN), unsafe_allow_html=True)
+
+    if not ANTHROPIC_AVAILABLE:
+        st.markdown(
+            '<div class="alert-panel"><b>anthropic package not installed.</b><br>'
+            'Run: <code>pip install anthropic</code> then restart the app.</div>',
+            unsafe_allow_html=True)
+        return
+
+    api_key = _get_api_key()
+    if not api_key:
+        st.markdown(
+            '<div class="warn-panel">No Anthropic API key found. '
+            'Configure it first on the <b>AI Copilot</b> page.</div>',
+            unsafe_allow_html=True)
+        return
+
+    # ── Pre-compute all metrics to feed Claude ─────────────────────────────────
+    today       = datetime.now()
+    total       = len(df)
+    pending     = int((df["State"] == "Pending for Review").sum())
+    clarify     = int((df["State"] == "Sent for Clarification").sum())
+    closed      = int((df["State"] == "Closed").sum())
+    rejected    = int((df["State"] == "Rejected").sum())
+    unassigned  = int((df["Assigned To Clean"] == "").sum())
+    breached    = int(df["SLA Breached"].sum())
+    breach_pct  = breached / total * 100 if total else 0
+    avg_open    = df["Days Open"].mean()
+    closed_df   = df[df["State"] == "Closed"]
+    avg_res     = closed_df["Days Open"].mean() if not closed_df.empty else 0
+
+    # Workload summary
+    eng_load = (df[df["Assigned To Clean"] != ""]
+                .groupby("Assigned To Clean").size()
+                .sort_values(ascending=False))
+    overloaded  = int((eng_load > 10).sum())
+    optimal     = int((eng_load <= 5).sum())
+    top_eng     = eng_load.index[0] if not eng_load.empty else "N/A"
+    top_eng_cnt = int(eng_load.iloc[0]) if not eng_load.empty else 0
+
+    # Top request types
+    top_types = df["Request Type"].replace("", "Unknown").value_counts().head(5)
+
+    # SLA by priority
+    sla_df = df.groupby("Priority").agg(
+        Total=("Request ID", "count"),
+        Breached=("SLA Breached", "sum")
+    ).reindex(["Critical", "High", "Medium", "Low"]).fillna(0)
+
+    # Unassigned critical count
+    crit_unasgn = int(((df["Assigned To Clean"] == "") & (df["Priority"] == "Critical")).sum())
+    high_unasgn = int(((df["Assigned To Clean"] == "") & (df["Priority"] == "High")).sum())
+
+    # Top SLA-breached request types
+    breach_by_type = (df[df["SLA Breached"]]
+                      .groupby("Request Type").size()
+                      .sort_values(ascending=False).head(3))
+
+    metrics_text = f"""
+BRIEFING INPUT METRICS — {today.strftime('%A, %d %B %Y')}
+
+VOLUME
+- Total active tickets: {total}
+- Pending for Review: {pending} ({pending/total*100:.0f}%)
+- Sent for Clarification: {clarify}
+- Closed: {closed} ({closed/total*100:.0f}%)
+- Rejected: {rejected}
+
+SLA PERFORMANCE
+- Overall breach rate: {breach_pct:.1f}% ({breached} tickets)
+- Average days open (all tickets): {avg_open:.1f} days
+- Average resolution time (closed): {avg_res:.1f} days
+- SLA by priority: {"; ".join([f"{p}: {int(sla_df.loc[p,'Breached'])}/{int(sla_df.loc[p,'Total'])} breached" for p in ['Critical','High','Medium','Low'] if p in sla_df.index])}
+- Top breach types: {", ".join([f"{rt} ({cnt})" for rt, cnt in breach_by_type.items()])}
+
+WORKLOAD
+- Total unassigned tickets: {unassigned}
+- Unassigned Critical: {crit_unasgn}
+- Unassigned High: {high_unasgn}
+- Engineers with >10 tickets (overloaded): {overloaded}
+- Engineers with <=5 tickets (optimal): {optimal}
+- Most loaded engineer: {top_eng} ({top_eng_cnt} tickets)
+
+TOP REQUEST TYPES
+{chr(10).join([f"- {rt}: {cnt}" for rt, cnt in top_types.items()])}
+"""
+
+    briefing_prompt = f"""You are a senior AppSec Operations lead writing the weekly status briefing for
+your security team and management. Based strictly on the metrics below, write a professional
+weekly intelligence briefing.
+
+Structure it as:
+1. **EXECUTIVE SUMMARY** (2-3 sentences capturing the most critical situation)
+2. **VOLUME & PIPELINE** (ticket volume, state breakdown, trends to note)
+3. **SLA PERFORMANCE** (breach analysis, worst performing areas, compliance health)
+4. **WORKLOAD & CAPACITY** (engineer load, unassigned queue urgency)
+5. **TOP RISKS THIS WEEK** (numbered list of the 3-4 most urgent things needing action)
+6. **RECOMMENDED ACTIONS** (numbered, specific, actionable — assign owners if clear from data)
+
+Tone: professional, data-driven, concise. Use bold for critical numbers.
+Do NOT add information not in the metrics. Be direct — skip filler phrases.
+
+{metrics_text}"""
+
+    # ── Show preview KPIs ──────────────────────────────────────────────────────
+    render_kpis([
+        (f"{total:,}",         "Total Tickets",    NEON_BLUE,   "📋", ""),
+        (f"{breach_pct:.1f}%", "SLA Breach Rate",  NEON_RED,    "🚨", f"{breached} tickets"),
+        (f"{unassigned:,}",    "Unassigned",        NEON_ORANGE, "📭", f"{crit_unasgn} critical"),
+        (f"{overloaded:,}",    "Overloaded Eng.",   NEON_RED,    "⚠️",  ">10 tickets each"),
+    ])
+
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+
+    # ── Generate / show briefing ───────────────────────────────────────────────
+    col_btn, col_info = st.columns([1, 3])
+    with col_btn:
+        generate = st.button("Generate Briefing", key="gen_brief", use_container_width=True)
+    with col_info:
+        st.markdown(
+            f"<div style='padding:10px 0;font-size:0.82rem;color:#6c7a9c'>"
+            f"Generates a full executive briefing for <b style='color:#cdd6f4'>"
+            f"{today.strftime('%d %b %Y')}</b> grounded in live ticket data.</div>",
+            unsafe_allow_html=True)
+
+    if "briefing_output" in st.session_state and not generate:
+        _render_briefing_output(st.session_state["briefing_output"], today)
+
+    if generate:
+        st.session_state.pop("briefing_output", None)
+        with st.spinner("Generating briefing with Claude..."):
+            try:
+                client  = _anthropic.Anthropic(api_key=api_key)
+                message = client.messages.create(
+                    model="claude-sonnet-4-6",
+                    max_tokens=2048,
+                    messages=[{"role": "user", "content": briefing_prompt}],
+                )
+                result = message.content[0].text
+                st.session_state["briefing_output"] = result
+                _render_briefing_output(result, today)
+            except Exception as e:
+                st.error(f"Claude API error: {e}")
+
+
+def _render_briefing_output(text: str, today: datetime):
+    """Render the briefing text with download button."""
+    st.markdown(section_hdr("Generated Briefing", ""), unsafe_allow_html=True)
+    st.markdown(
+        f"<div style='background:rgba(0,255,136,0.04);border:1px solid rgba(0,255,136,0.18);"
+        f"border-radius:12px;padding:24px 28px;line-height:1.8;font-size:0.88rem'>"
+        f"{text.replace(chr(10), '<br>')}</div>",
+        unsafe_allow_html=True)
+    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+    dl1, dl2 = st.columns([1, 4])
+    with dl1:
+        st.download_button(
+            "Download as .md",
+            data=f"# AppSec Weekly Intelligence Briefing\n**{today.strftime('%d %B %Y')}**\n\n{text}",
+            file_name=f"appsec_briefing_{today.strftime('%Y%m%d')}.md",
+            mime="text/markdown",
+            key="dl_briefing")
+
+
+# ─── Page: ServiceNow Write-Back Agent ────────────────────────────────────────
+
+def page_snow_sync(df: pd.DataFrame):
+    st.markdown(page_banner(
+        "ServiceNow Write-Back Agent",
+        "Sync dashboard assignments and state changes back to your ServiceNow instance",
+        NEON_ORANGE), unsafe_allow_html=True)
+
+    if not REQUESTS_AVAILABLE:
+        st.markdown(
+            '<div class="alert-panel"><b>requests package not installed.</b><br>'
+            'Run: <code>pip install requests</code> then restart the app.</div>',
+            unsafe_allow_html=True)
+        return
+
+    # ── Configuration panel ────────────────────────────────────────────────────
+    st.markdown(section_hdr("ServiceNow Connection", ""), unsafe_allow_html=True)
+
+    cfg_col1, cfg_col2 = st.columns(2)
+    with cfg_col1:
+        snow_instance = st.text_input(
+            "SNOW Instance URL",
+            value=st.session_state.get("snow_instance", ""),
+            placeholder="https://yourcompany.service-now.com",
+            key="snow_inst_input")
+        snow_user = st.text_input(
+            "Username",
+            value=st.session_state.get("snow_user", ""),
+            placeholder="api_user or your SNOW username",
+            key="snow_user_input")
+    with cfg_col2:
+        snow_pass = st.text_input(
+            "Password / API Token",
+            type="password",
+            value=st.session_state.get("snow_pass", ""),
+            key="snow_pass_input")
+        snow_table = st.text_input(
+            "Table Name",
+            value=st.session_state.get("snow_table", "sn_grc_application_security"),
+            placeholder="sn_grc_application_security",
+            key="snow_table_input")
+
+    btn1, btn2, _ = st.columns([1, 1, 3])
+    with btn1:
+        if st.button("Save Config", key="snow_save"):
+            st.session_state["snow_instance"] = snow_instance.rstrip("/")
+            st.session_state["snow_user"]     = snow_user
+            st.session_state["snow_pass"]     = snow_pass
+            st.session_state["snow_table"]    = snow_table
+            st.success("Connection config saved for this session.")
+    with btn2:
+        if st.button("Test Connection", key="snow_test"):
+            _snow_test_connection()
+
+    if not all([
+        st.session_state.get("snow_instance"),
+        st.session_state.get("snow_user"),
+        st.session_state.get("snow_pass"),
+    ]):
+        st.markdown(
+            '<div class="info-panel">'
+            '<b>How to connect:</b><br>'
+            '1. Enter your ServiceNow instance URL (e.g. <code>https://mycompany.service-now.com</code>)<br>'
+            '2. Provide a user with <b>rest_service</b> or <b>admin</b> role in ServiceNow<br>'
+            '3. The table name is the GRC table your tickets live in — check with your SNOW admin<br>'
+            '4. Save config and test the connection before syncing'
+            '</div>',
+            unsafe_allow_html=True)
+
+    # ── Pending changes panel ──────────────────────────────────────────────────
+    st.markdown(section_hdr("Pending Changes", ""), unsafe_allow_html=True)
+
+    conn  = sqlite3.connect(DB_PATH)
+    state_changes = pd.read_sql(
+        "SELECT request_id, state, priority, notes, updated_at FROM ticket_states ORDER BY updated_at DESC",
+        conn)
+    assign_changes = pd.read_sql(
+        "SELECT request_id, assigned_to, assigned_group, assigned_at FROM assignments ORDER BY assigned_at DESC",
+        conn)
+    conn.close()
+
+    total_pending = len(state_changes) + len(assign_changes)
+
+    render_kpis([
+        (f"{len(state_changes):,}",  "State Changes",       NEON_BLUE,   "🔄", "queued for sync"),
+        (f"{len(assign_changes):,}", "Assignment Changes",  NEON_GREEN,  "👤", "queued for sync"),
+        (f"{total_pending:,}",       "Total Pending",       NEON_ORANGE, "📤", "ready to push"),
+        (f"{st.session_state.get('snow_last_sync', 'Never')}", "Last Sync", NEON_PURPLE, "✅", ""),
+    ])
+
+    if not state_changes.empty:
+        st.markdown("**State Changes Queued**")
+        st.dataframe(state_changes.rename(columns={
+            "request_id": "Request ID", "state": "New State",
+            "priority": "Priority", "updated_at": "Changed At"
+        })[["Request ID", "New State", "Priority", "Changed At"]],
+            use_container_width=True, hide_index=True)
+
+    if not assign_changes.empty:
+        st.markdown("**Assignment Changes Queued**")
+        st.dataframe(assign_changes.rename(columns={
+            "request_id": "Request ID", "assigned_to": "Assigned To",
+            "assigned_group": "Group", "assigned_at": "Changed At"
+        })[["Request ID", "Assigned To", "Group", "Changed At"]],
+            use_container_width=True, hide_index=True)
+
+    if total_pending == 0:
+        st.markdown(
+            '<div class="info-panel">No pending changes. Make assignments or state updates '
+            'in the <b>Unassigned Queue</b> or <b>Ticket Tracker</b> pages first.</div>',
+            unsafe_allow_html=True)
+        return
+
+    # ── Sync button ────────────────────────────────────────────────────────────
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    sync_col1, sync_col2 = st.columns([1, 4])
+    with sync_col1:
+        do_sync = st.button("Sync to ServiceNow", key="snow_sync_btn", use_container_width=True)
+    with sync_col2:
+        st.markdown(
+            f"<div style='padding:10px 0;font-size:0.82rem;color:#6c7a9c'>"
+            f"Will push <b style='color:#ffa64d'>{total_pending}</b> changes to "
+            f"<b style='color:#cdd6f4'>{st.session_state.get('snow_instance','(not configured)')}</b>"
+            f" / table <b style='color:#cdd6f4'>{st.session_state.get('snow_table','(not configured)')}</b>"
+            f"</div>",
+            unsafe_allow_html=True)
+
+    if do_sync:
+        if not all([st.session_state.get("snow_instance"),
+                    st.session_state.get("snow_user"),
+                    st.session_state.get("snow_pass")]):
+            st.error("Configure and save connection details before syncing.")
+            return
+        _snow_do_sync(state_changes, assign_changes, df)
+
+
+def _snow_test_connection():
+    """Attempt a lightweight GET to the SNOW instance and report result."""
+    inst  = st.session_state.get("snow_instance", "").rstrip("/")
+    user  = st.session_state.get("snow_user", "")
+    passwd= st.session_state.get("snow_pass", "")
+    table = st.session_state.get("snow_table", "sn_grc_application_security")
+    if not inst:
+        st.error("Enter the instance URL first.")
+        return
+    try:
+        url = f"{inst}/api/now/table/{table}?sysparm_limit=1&sysparm_fields=sys_id"
+        resp = _requests.get(url, auth=(user, passwd), timeout=10,
+                             headers={"Accept": "application/json"})
+        if resp.status_code == 200:
+            st.success(f"Connection successful. Table `{table}` is accessible.")
+        elif resp.status_code == 401:
+            st.error("Authentication failed — check username/password.")
+        elif resp.status_code == 403:
+            st.error("Access denied — user may lack rest_service role.")
+        elif resp.status_code == 404:
+            st.error(f"Table `{table}` not found. Check the table name with your SNOW admin.")
+        else:
+            st.warning(f"Unexpected response: HTTP {resp.status_code} — {resp.text[:200]}")
+    except _requests.exceptions.ConnectionError:
+        st.error(f"Cannot reach `{inst}`. Check the URL and network connectivity.")
+    except _requests.exceptions.Timeout:
+        st.error("Connection timed out. The SNOW instance may be unreachable.")
+    except Exception as e:
+        st.error(f"Unexpected error: {e}")
+
+
+def _snow_do_sync(state_changes: pd.DataFrame, assign_changes: pd.DataFrame,
+                  df: pd.DataFrame):
+    """Push all queued changes to ServiceNow via Table REST API."""
+    inst   = st.session_state.get("snow_instance", "").rstrip("/")
+    user   = st.session_state.get("snow_user", "")
+    passwd = st.session_state.get("snow_pass", "")
+    table  = st.session_state.get("snow_table", "sn_grc_application_security")
+    auth   = (user, passwd)
+    headers= {"Content-Type": "application/json", "Accept": "application/json"}
+
+    # Build a Request ID → sys_id map from the loaded dataframe if sys_id column exists
+    sys_id_map: dict = {}
+    if "sys_id" in df.columns:
+        sys_id_map = dict(zip(df["Request ID"], df["sys_id"]))
+
+    results = {"success": 0, "skipped": 0, "failed": 0, "log": []}
+
+    def _push(request_id: str, payload: dict):
+        sys_id = sys_id_map.get(request_id)
+        if not sys_id:
+            results["skipped"] += 1
+            results["log"].append(
+                f"SKIP  {request_id} — no sys_id in dataset (SNOW cannot match without it)")
+            return
+        url = f"{inst}/api/now/table/{table}/{sys_id}"
+        try:
+            r = _requests.patch(url, auth=auth, headers=headers,
+                                data=json.dumps(payload), timeout=15)
+            if r.status_code in (200, 201):
+                results["success"] += 1
+                results["log"].append(f"OK    {request_id} → {payload}")
+            else:
+                results["failed"] += 1
+                results["log"].append(
+                    f"FAIL  {request_id} — HTTP {r.status_code}: {r.text[:120]}")
+        except Exception as exc:
+            results["failed"] += 1
+            results["log"].append(f"ERR   {request_id} — {exc}")
+
+    progress = st.progress(0, text="Syncing to ServiceNow...")
+    total_ops = len(state_changes) + len(assign_changes)
+    done = 0
+
+    for _, row in state_changes.iterrows():
+        _push(row["request_id"], {"state": row["state"], "priority": row["priority"]})
+        done += 1
+        progress.progress(done / total_ops, text=f"Syncing... {done}/{total_ops}")
+
+    for _, row in assign_changes.iterrows():
+        _push(row["request_id"], {"assigned_to": row["assigned_to"],
+                                  "assignment_group": row["assigned_group"]})
+        done += 1
+        progress.progress(done / total_ops, text=f"Syncing... {done}/{total_ops}")
+
+    progress.empty()
+    st.session_state["snow_last_sync"] = datetime.now().strftime("%d %b %Y %H:%M")
+
+    # ── Results summary ────────────────────────────────────────────────────────
+    render_kpis([
+        (f"{results['success']}",  "Synced OK",  NEON_GREEN,  "✅", "pushed to SNOW"),
+        (f"{results['skipped']}",  "Skipped",    NEON_ORANGE, "⚠️",  "no sys_id found"),
+        (f"{results['failed']}",   "Failed",     NEON_RED,    "❌", "check log below"),
+    ])
+
+    if results["skipped"] > 0:
+        st.markdown(
+            '<div class="warn-panel"><b>Skipped tickets</b> have no <code>sys_id</code> column '
+            'in your CSV. ServiceNow requires <code>sys_id</code> to update the correct record. '
+            'Re-export your CSV with the <b>sys_id</b> field included from ServiceNow.</div>',
+            unsafe_allow_html=True)
+
+    with st.expander("Sync Log", expanded=results["failed"] > 0):
+        log_text = "\n".join(results["log"]) or "No operations performed."
+        st.code(log_text, language=None)
+
+
 # ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 def render_sidebar():
@@ -1326,6 +1973,10 @@ def render_sidebar():
         </div>
         """, unsafe_allow_html=True)
 
+        st.markdown(
+            '<div style="font-size:0.58rem;letter-spacing:0.18em;text-transform:uppercase;'
+            'color:#4a5568;padding:0 4px;margin-bottom:2px">Operations</div>',
+            unsafe_allow_html=True)
         page = st.radio("Navigation", [
             "Overview",
             "Workload Distribution",
@@ -1333,6 +1984,22 @@ def render_sidebar():
             "Ticket Tracker",
             "SLA & Analytics",
         ], label_visibility="collapsed", key="nav")
+
+        st.markdown(
+            '<div style="margin:8px 0 2px;border-top:1px solid rgba(180,79,255,0.2);'
+            'padding-top:8px;font-size:0.58rem;letter-spacing:0.18em;text-transform:uppercase;'
+            'color:#b44fff;padding:8px 4px 2px">AI Agents</div>',
+            unsafe_allow_html=True)
+        agent_page = st.radio("Agent Navigation", [
+            "AI Copilot",
+            "Weekly Briefing",
+            "ServiceNow Sync",
+        ], label_visibility="collapsed", key="nav_agent",
+            index=None)  # no default selection — user must click
+
+        # Whichever was clicked last wins; agent pages take precedence when selected
+        if agent_page is not None:
+            page = agent_page
 
         st.markdown('<div style="margin:16px 0;border-top:1px solid rgba(0,212,255,0.08)"></div>',
                     unsafe_allow_html=True)
@@ -1526,6 +2193,9 @@ def main():
     elif page == "Unassigned Queue":       page_unassigned(df)
     elif page == "Ticket Tracker":         page_tracker(df)
     elif page == "SLA & Analytics":        page_analytics(df)
+    elif page == "AI Copilot":             page_copilot(df)
+    elif page == "Weekly Briefing":        page_briefing(df)
+    elif page == "ServiceNow Sync":        page_snow_sync(df)
 
 
 if __name__ == "__main__":
