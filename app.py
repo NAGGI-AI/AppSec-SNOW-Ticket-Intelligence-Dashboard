@@ -496,19 +496,33 @@ div[data-baseweb="tooltip"] > div,
 
 /* ── Text input ── */
 .stTextInput > div > div > input {{
-    background: linear-gradient(135deg, rgba(0,212,255,0.06) 0%, rgba(13,21,38,0.98) 100%) !important;
+    background: #0d1526 !important;
     border: 1px solid {NEON_BLUE} !important;
     border-radius: 8px !important;
     color: #e2eaf8 !important;
     box-shadow: 0 0 8px rgba(0,212,255,0.1) !important;
     font-weight: 500 !important;
+    font-size: 0.88rem !important;
 }}
 .stTextInput > div > div > input::placeholder {{
-    color: #5a6a8a !important;
+    color: #8892b0 !important;
+    font-style: italic !important;
 }}
 .stTextInput > div > div > input:focus {{
     border-color: {NEON_GREEN} !important;
     box-shadow: 0 0 0 2px rgba(0,255,136,0.18), 0 0 16px rgba(0,255,136,0.1) !important;
+}}
+/* ── Browser autofill override — prevents white/yellow flash on filled fields ── */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {{
+    -webkit-box-shadow: 0 0 0 1000px #0d1526 inset !important;
+    -webkit-text-fill-color: #e2eaf8 !important;
+    caret-color: #e2eaf8 !important;
+    border: 1px solid {NEON_BLUE} !important;
+    border-radius: 8px !important;
+    transition: background-color 9999s ease-in-out 0s !important;
 }}
 /* Label text above all inputs */
 .stTextInput label, .stSelectbox label,
@@ -2038,30 +2052,31 @@ def page_snow_sync(df: pd.DataFrame):
             placeholder="sn_grc_application_security",
             key="snow_table_input")
 
+    def _persist_snow_fields():
+        """Save current field values into session state (called by both buttons)."""
+        st.session_state["snow_instance"] = snow_instance.rstrip("/")
+        st.session_state["snow_user"]     = snow_user
+        st.session_state["snow_pass"]     = snow_pass
+        st.session_state["snow_table"]    = snow_table or "sn_grc_application_security"
+
     btn1, btn2, _ = st.columns([1, 1, 3])
     with btn1:
         if st.button("Save Config", key="snow_save"):
-            st.session_state["snow_instance"] = snow_instance.rstrip("/")
-            st.session_state["snow_user"]     = snow_user
-            st.session_state["snow_pass"]     = snow_pass
-            st.session_state["snow_table"]    = snow_table
+            _persist_snow_fields()
             st.success("Connection config saved for this session.")
     with btn2:
         if st.button("Test Connection", key="snow_test"):
+            _persist_snow_fields()          # always sync live field values first
             _snow_test_connection()
 
-    if not all([
-        st.session_state.get("snow_instance"),
-        st.session_state.get("snow_user"),
-        st.session_state.get("snow_pass"),
-    ]):
+    if not all([snow_instance, snow_user, snow_pass]):
         st.markdown(
             '<div class="info-panel">'
             '<b>How to connect:</b><br>'
             '1. Enter your ServiceNow instance URL (e.g. <code>https://mycompany.service-now.com</code>)<br>'
             '2. Provide a user with <b>rest_service</b> or <b>admin</b> role in ServiceNow<br>'
             '3. The table name is the GRC table your tickets live in — check with your SNOW admin<br>'
-            '4. Save config and test the connection before syncing'
+            '4. Click <b>Test Connection</b> directly — no need to save first'
             '</div>',
             unsafe_allow_html=True)
 
