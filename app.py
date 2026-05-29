@@ -357,10 +357,10 @@ p, li, label {{ color: var(--text) !important; }}
     font-family: 'Inter', sans-serif !important;
     font-weight: 600 !important;
     font-size: 0.82rem !important;
-    letter-spacing: 0.04em !important;
+    letter-spacing: 0.03em !important;
     border-radius: 8px !important;
     transition: all 0.25s !important;
-    text-transform: uppercase !important;
+    text-transform: none !important;
 }}
 .stButton > button:hover {{
     background: linear-gradient(135deg, rgba(0,212,255,0.22), rgba(0,255,136,0.15)) !important;
@@ -371,6 +371,46 @@ p, li, label {{ color: var(--text) !important; }}
     background: linear-gradient(135deg, rgba(0,255,136,0.1), rgba(0,212,255,0.08)) !important;
     border: 1px solid {NEON_GREEN} !important;
     color: {NEON_GREEN} !important;
+    text-transform: none !important;
+}}
+
+/* ── Chat input dark theme ── */
+[data-testid="stChatInput"] {{
+    background: rgba(13,21,38,0.97) !important;
+    border: 1px solid rgba(180,79,255,0.35) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 0 28px rgba(180,79,255,0.1), inset 0 1px 0 rgba(180,79,255,0.08) !important;
+}}
+[data-testid="stChatInput"] textarea {{
+    color: #e2eaf8 !important;
+    background: transparent !important;
+    font-size: 0.88rem !important;
+    caret-color: {NEON_PURPLE} !important;
+}}
+[data-testid="stChatInput"] textarea::placeholder {{
+    color: #6c7a9c !important;
+    font-style: italic !important;
+}}
+[data-testid="stChatInput"] button {{
+    background: rgba(180,79,255,0.2) !important;
+    border-radius: 8px !important;
+    color: {NEON_PURPLE} !important;
+}}
+[data-testid="stChatInput"] button:hover {{
+    background: rgba(180,79,255,0.4) !important;
+}}
+
+/* ── Chat messages ── */
+[data-testid="stChatMessage"] {{
+    background: rgba(13,21,38,0.7) !important;
+    border: 1px solid rgba(0,212,255,0.08) !important;
+    border-radius: 14px !important;
+    padding: 4px 8px !important;
+    margin-bottom: 6px !important;
+}}
+[data-testid="stChatMessage"][data-testid*="assistant"] {{
+    border-color: rgba(180,79,255,0.15) !important;
+    background: rgba(180,79,255,0.04) !important;
 }}
 
 /* ── Form inputs — control box ── */
@@ -1623,29 +1663,79 @@ def _rule_based_answer(question: str, df: pd.DataFrame) -> str:
 def page_copilot(df: pd.DataFrame):
     api_key = _get_api_key()
     mode    = "claude" if (ANTHROPIC_AVAILABLE and api_key) else "local"
+    mode_label = "Claude AI" if mode == "claude" else "Intelligence Engine"
 
-    subtitle = ("Streaming responses via Claude — grounded in live ticket data"
-                if mode == "claude"
-                else "Rule-based intelligence engine — answers computed from live ticket data")
-    st.markdown(page_banner("AI Copilot", subtitle, NEON_PURPLE), unsafe_allow_html=True)
+    st.markdown(page_banner(
+        "AI Copilot",
+        f"Ask anything about your AppSec ticket pipeline · {mode_label} · Live data",
+        NEON_PURPLE), unsafe_allow_html=True)
 
-    # ── Optional: Claude API key setup banner ──────────────────────────────────
+    # ── Live context stats bar ─────────────────────────────────────────────────
+    total      = len(df)
+    breached   = int(df["SLA Breached"].sum())
+    unassigned = int((df["Assigned To Clean"] == "").sum())
+    eng_count  = df[df["Assigned To Clean"] != ""]["Assigned To Clean"].nunique()
+    breach_pct = breached / total * 100 if total else 0
+
+    st.markdown(f"""
+    <div style='display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap'>
+        <div style='flex:1;min-width:110px;background:rgba(180,79,255,0.07);
+            border:1px solid rgba(180,79,255,0.25);border-radius:10px;padding:10px 14px'>
+            <div style='font-family:Orbitron,monospace;font-size:1.2rem;font-weight:700;
+                color:{NEON_PURPLE}'>{total:,}</div>
+            <div style='font-size:0.65rem;color:#6c7a9c;text-transform:uppercase;
+                letter-spacing:0.1em'>Total Tickets</div>
+        </div>
+        <div style='flex:1;min-width:110px;background:rgba(255,75,110,0.07);
+            border:1px solid rgba(255,75,110,0.25);border-radius:10px;padding:10px 14px'>
+            <div style='font-family:Orbitron,monospace;font-size:1.2rem;font-weight:700;
+                color:{NEON_RED}'>{breach_pct:.1f}%</div>
+            <div style='font-size:0.65rem;color:#6c7a9c;text-transform:uppercase;
+                letter-spacing:0.1em'>SLA Breach Rate</div>
+        </div>
+        <div style='flex:1;min-width:110px;background:rgba(255,166,77,0.07);
+            border:1px solid rgba(255,166,77,0.25);border-radius:10px;padding:10px 14px'>
+            <div style='font-family:Orbitron,monospace;font-size:1.2rem;font-weight:700;
+                color:{NEON_ORANGE}'>{unassigned}</div>
+            <div style='font-size:0.65rem;color:#6c7a9c;text-transform:uppercase;
+                letter-spacing:0.1em'>Unassigned</div>
+        </div>
+        <div style='flex:1;min-width:110px;background:rgba(0,212,255,0.07);
+            border:1px solid rgba(0,212,255,0.2);border-radius:10px;padding:10px 14px'>
+            <div style='font-family:Orbitron,monospace;font-size:1.2rem;font-weight:700;
+                color:{NEON_BLUE}'>{eng_count}</div>
+            <div style='font-size:0.65rem;color:#6c7a9c;text-transform:uppercase;
+                letter-spacing:0.1em'>Active Engineers</div>
+        </div>
+        <div style='flex:1;min-width:140px;background:rgba(0,255,136,0.04);
+            border:1px solid rgba(0,255,136,0.15);border-radius:10px;
+            padding:10px 14px;display:flex;flex-direction:column;justify-content:center'>
+            <div style='font-size:0.65rem;color:#b44fff;text-transform:uppercase;
+                letter-spacing:0.1em;margin-bottom:2px'>Mode</div>
+            <div style='font-size:0.78rem;color:#cdd6f4;font-weight:600'>{mode_label}</div>
+            <div style='font-size:0.62rem;color:#4a5568;margin-top:1px'>
+                {'Claude Sonnet 4.6' if mode == 'claude' else 'No API key needed'}</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Optional: Claude API key setup ────────────────────────────────────────
     if mode == "local":
         with st.expander("Upgrade to Claude AI (optional — needs API key)", expanded=False):
             st.markdown(
-                '<div class="info-panel">The copilot works fully without a key. '
-                'Add an Anthropic API key below to get richer conversational answers.</div>',
-                unsafe_allow_html=True)
+                '<div class="info-panel" style="margin-bottom:10px">The copilot works fully '
+                'without a key. Add an Anthropic API key to unlock richer conversational '
+                'answers with full context awareness.</div>', unsafe_allow_html=True)
             with st.form("api_key_form", clear_on_submit=False):
                 key_input = st.text_input("Anthropic API Key", type="password",
                                           placeholder="sk-ant-...")
                 if st.form_submit_button("Save Key"):
                     if key_input.startswith("sk-"):
                         st.session_state["anthropic_api_key"] = key_input
-                        st.success("Key saved. Reload the page to activate Claude mode.")
+                        st.success("Key saved. Reload page to activate Claude mode.")
                         st.rerun()
                     else:
-                        st.error("Key must start with 'sk-'")
+                        st.error("Key must start with 'sk-ant-'")
 
     # ── Init chat history ──────────────────────────────────────────────────────
     if "copilot_messages" not in st.session_state:
@@ -1654,33 +1744,62 @@ def page_copilot(df: pd.DataFrame):
     if mode == "claude" and "copilot_context" not in st.session_state:
         st.session_state["copilot_context"] = _build_data_context(df)
 
-    # ── Render existing chat ───────────────────────────────────────────────────
+    # ── Welcome state — shown only when chat is empty ──────────────────────────
+    if not st.session_state["copilot_messages"]:
+        st.markdown(f"""
+        <div style='text-align:center;padding:20px 0 10px'>
+            <div style='font-size:2.4rem;margin-bottom:8px'>🛡</div>
+            <div style='font-family:Orbitron,monospace;font-size:1rem;font-weight:700;
+                background:linear-gradient(135deg,{NEON_PURPLE},{NEON_BLUE});
+                -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+                background-clip:text;letter-spacing:0.06em'>AppSec Intelligence Copilot</div>
+            <div style='color:#6c7a9c;font-size:0.85rem;margin-top:6px'>
+                Ask anything about your live ServiceNow ticket data
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown(section_hdr("Suggested Questions — click to ask", ""), unsafe_allow_html=True)
+
+        suggestions = [
+            ("👷", "Workload",     "Who has the lightest workload right now?"),
+            ("🚨", "SLA Breach",   "What is our current SLA breach situation?"),
+            ("📭", "Unassigned",   "Summarize all unassigned tickets and suggest a triage plan."),
+            ("📊", "Request Types","Which request type has the worst SLA compliance?"),
+            ("🔴", "Overloaded",   "Which engineer is most overloaded?"),
+            ("📋", "Overview",     "Give me an overview of the current dashboard."),
+        ]
+
+        col1, col2, col3 = st.columns(3)
+        cols = [col1, col2, col3]
+        for i, (icon, label, question) in enumerate(suggestions):
+            with cols[i % 3]:
+                st.markdown(f"""
+                <div style='background:rgba(180,79,255,0.05);
+                    border:1px solid rgba(180,79,255,0.2);
+                    border-top:2px solid {NEON_PURPLE};
+                    border-radius:0 0 10px 10px;
+                    padding:4px 12px 6px;margin-bottom:2px'>
+                    <span style='font-size:0.65rem;text-transform:uppercase;
+                        letter-spacing:0.1em;color:{NEON_PURPLE};font-weight:600'>
+                        {icon} {label}</span>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button(question, key=f"sug_{i}", use_container_width=True):
+                    st.session_state["copilot_messages"].append(
+                        {"role": "user", "content": question})
+                    st.rerun()
+
+        st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+
+    # ── Render existing chat messages ──────────────────────────────────────────
     for msg in st.session_state["copilot_messages"]:
         with st.chat_message(msg["role"],
                              avatar="🛡" if msg["role"] == "assistant" else "👤"):
             st.markdown(msg["content"])
 
-    # ── Suggested prompts (shown only when chat is empty) ─────────────────────
-    if not st.session_state["copilot_messages"]:
-        st.markdown(section_hdr("Suggested Questions", ""), unsafe_allow_html=True)
-        suggestions = [
-            "Who has the lightest workload right now?",
-            "What is our current SLA breach situation?",
-            "Summarize all unassigned tickets and suggest a triage plan.",
-            "Which request type has the worst SLA compliance?",
-            "Which engineer is most overloaded?",
-            "Give me an overview of the current dashboard.",
-        ]
-        cols = st.columns(2)
-        for i, s in enumerate(suggestions):
-            with cols[i % 2]:
-                if st.button(s, key=f"sug_{i}", use_container_width=True):
-                    st.session_state["copilot_messages"].append(
-                        {"role": "user", "content": s})
-                    st.rerun()
-
     # ── Chat input ─────────────────────────────────────────────────────────────
-    user_input = st.chat_input("Ask about your AppSec tickets...")
+    user_input = st.chat_input("Ask about your AppSec tickets — workload, SLA, assignments...")
 
     if user_input:
         st.session_state["copilot_messages"].append(
@@ -1693,7 +1812,6 @@ def page_copilot(df: pd.DataFrame):
             placeholder = st.empty()
 
             if mode == "claude":
-                # ── Claude streaming mode ──────────────────────────────────────
                 system_prompt = (
                     "You are the AppSec Operations Intelligence Copilot for a cybersecurity team. "
                     "Be concise, direct, and always ground your answers in the live dashboard data "
@@ -1725,7 +1843,6 @@ def page_copilot(df: pd.DataFrame):
                     else:
                         placeholder.error(f"Claude API error: {err}")
             else:
-                # ── Rule-based local mode ──────────────────────────────────────
                 answer = _rule_based_answer(user_input, df)
                 placeholder.markdown(answer)
                 st.session_state["copilot_messages"].append(
@@ -1733,11 +1850,13 @@ def page_copilot(df: pd.DataFrame):
 
     # ── Clear chat ─────────────────────────────────────────────────────────────
     if st.session_state["copilot_messages"]:
-        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-        if st.button("Clear Chat", key="copilot_clear"):
-            st.session_state["copilot_messages"] = []
-            st.session_state.pop("copilot_context", None)
-            st.rerun()
+        st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+        col_clr, _ = st.columns([1, 5])
+        with col_clr:
+            if st.button("Clear Chat", key="copilot_clear", use_container_width=True):
+                st.session_state["copilot_messages"] = []
+                st.session_state.pop("copilot_context", None)
+                st.rerun()
 
 
 # ─── Briefing: pure-Python template (no API key needed) ───────────────────────
@@ -1992,14 +2111,48 @@ def page_briefing(df: pd.DataFrame):
 
 
 def _render_briefing_output(text: str, today: datetime):
-    """Render the briefing text with download button."""
+    """Render the briefing text as formatted markdown with a professional glowing container."""
     st.markdown(section_hdr("Generated Briefing", ""), unsafe_allow_html=True)
-    st.markdown(
-        f"<div style='background:rgba(0,255,136,0.04);border:1px solid rgba(0,255,136,0.18);"
-        f"border-radius:12px;padding:24px 28px;line-height:1.8;font-size:0.88rem'>"
-        f"{text.replace(chr(10), '<br>')}</div>",
-        unsafe_allow_html=True)
-    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+
+    # Top accent bar + metadata ribbon
+    st.markdown(f"""
+    <div style='
+        background: linear-gradient(135deg, rgba(0,255,136,0.08) 0%, rgba(0,212,255,0.04) 100%);
+        border: 1px solid rgba(0,255,136,0.3);
+        border-left: 4px solid {NEON_GREEN};
+        border-radius: 0 14px 14px 0;
+        padding: 14px 22px 10px;
+        margin-bottom: 2px;
+        box-shadow: 0 0 40px rgba(0,255,136,0.07), inset 0 1px 0 rgba(0,255,136,0.08);
+    '>
+        <div style='display:flex;justify-content:space-between;align-items:center'>
+            <div>
+                <div style='font-family:Orbitron,monospace;font-size:0.78rem;color:{NEON_GREEN};
+                            letter-spacing:0.08em;font-weight:700'>WEEKLY INTELLIGENCE BRIEFING</div>
+                <div style='font-size:0.72rem;color:#6c7a9c;margin-top:3px'>
+                    {today.strftime('%A, %d %B %Y')} &nbsp;·&nbsp; Auto-generated from live ServiceNow data
+                </div>
+            </div>
+            <div style='font-family:Orbitron,monospace;font-size:1.2rem;color:{NEON_GREEN};
+                        opacity:0.6'>&#9632;</div>
+        </div>
+    </div>
+    <div style='
+        background: rgba(7,9,20,0.6);
+        border: 1px solid rgba(0,255,136,0.12);
+        border-top: none;
+        border-radius: 0 0 14px 14px;
+        padding: 24px 28px 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    '>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Render the actual markdown — this is what makes headings, tables, bold work
+    st.markdown(text)
+
+    st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
     dl1, dl2 = st.columns([1, 4])
     with dl1:
         st.download_button(
@@ -2265,39 +2418,48 @@ def render_sidebar():
         </div>
         """, unsafe_allow_html=True)
 
+        # ── Operations section ─────────────────────────────────────────────────
         st.markdown(
-            '<div style="font-size:0.58rem;letter-spacing:0.18em;text-transform:uppercase;'
-            'color:#4a5568;padding:0 4px;margin-bottom:2px">Operations</div>',
+            '<div style="font-size:0.58rem;letter-spacing:0.2em;text-transform:uppercase;'
+            'color:#4a5568;padding:0 6px;margin-bottom:3px;font-weight:700">Operations</div>',
             unsafe_allow_html=True)
-        page = st.radio("Navigation", [
+
+        # Reset agent radio when ops was last clicked
+        if st.session_state.get("_nav_grp") == "ops" and "_nav_agent" in st.session_state:
+            del st.session_state["_nav_agent"]
+
+        def _ops_changed():
+            st.session_state["_nav_grp"] = "ops"
+
+        ops_page = st.radio("Navigation", [
             "Overview",
             "Workload Distribution",
             "Unassigned Queue",
             "Ticket Tracker",
             "SLA & Analytics",
+        ], label_visibility="collapsed", key="nav", on_change=_ops_changed)
+
+        # ── AI Agents section ───────────────────────────────────────────────────
+        st.markdown(
+            '<div style="margin:12px 0 3px;border-top:1px solid rgba(180,79,255,0.3);'
+            'padding-top:10px;font-size:0.58rem;letter-spacing:0.2em;'
+            'text-transform:uppercase;color:#b44fff;padding-left:6px;font-weight:700">'
+            'AI Agents</div>',
+            unsafe_allow_html=True)
+
+        def _agent_changed():
+            st.session_state["_nav_grp"] = "agent"
+
+        agent_page = st.radio("Agent Navigation", [
             "AI Copilot",
             "Weekly Briefing",
             "ServiceNow Sync",
-        ], label_visibility="collapsed", key="nav")
+        ], label_visibility="collapsed", key="_nav_agent",
+            index=None, on_change=_agent_changed)
 
-        # Inject a visual divider + label between item 5 and 6 via CSS nth-child
-        st.markdown("""
-        <style>
-        [data-testid="stSidebar"] .stRadio > div > label:nth-child(6) {
-            margin-top: 10px !important;
-            border-top: 1px solid rgba(180,79,255,0.25) !important;
-            padding-top: 10px !important;
-        }
-        [data-testid="stSidebar"] .stRadio > div > label:nth-child(6)::before {
-            content: "AI AGENTS";
-            display: block;
-            font-size: 0.55rem;
-            letter-spacing: 0.18em;
-            color: #b44fff;
-            margin-bottom: 4px;
-            font-weight: 600;
-        }
-        </style>""", unsafe_allow_html=True)
+        # Active page: agent takes over when explicitly selected
+        page = agent_page if (st.session_state.get("_nav_grp") == "agent"
+                              and agent_page is not None) else ops_page
 
         st.markdown('<div style="margin:16px 0;border-top:1px solid rgba(0,212,255,0.08)"></div>',
                     unsafe_allow_html=True)
