@@ -1495,6 +1495,39 @@ def _rule_based_answer(question: str, df: pd.DataFrame) -> str:
     q = question.lower()
     total = len(df)
 
+    # ── Engineer list / directory queries (checked BEFORE generic workload) ───
+    if any(w in q for w in ["engineer list", "list of engineer", "all engineer",
+                             "show engineer", "engineer detail", "team list",
+                             "team member", "who are the", "list engineer",
+                             "engineer name", "full list", "complete list",
+                             "all team", "show team", "team detail"]):
+        eng = (df[df["Assigned To Clean"] != ""]
+               .groupby("Assigned To Clean").size()
+               .sort_values(ascending=False))
+        if eng.empty:
+            return "No engineers found in the current dataset."
+        lines = [
+            f"## Engineer Directory  ({len(eng)} engineers)",
+            "",
+            "| # | Engineer | Tickets | Status |",
+            "|---|----------|---------|--------|",
+        ]
+        for rank, (name, cnt) in enumerate(eng.items(), 1):
+            if cnt > 10:
+                status = "🔴 Overloaded"
+            elif cnt > 5:
+                status = "🟡 Moderate"
+            else:
+                status = "🟢 Optimal"
+            lines.append(f"| {rank} | {name} | {cnt} | {status} |")
+        lines += [
+            "",
+            f"**Total engineers:** {len(eng)}  |  "
+            f"**Overloaded (>10):** {int((eng > 10).sum())}  |  "
+            f"**Optimal (≤5):** {int((eng <= 5).sum())}",
+        ]
+        return "\n".join(lines)
+
     # ── Workload / engineer queries ────────────────────────────────────────────
     if any(w in q for w in ["workload", "load", "busy", "overload", "engineer",
                              "who has", "who have", "who having", "who is",
