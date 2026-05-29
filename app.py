@@ -1419,60 +1419,226 @@ def _build_data_context(df: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
+# ─── AI Copilot: rule-based query engine (no API key required) ────────────────
+
+def _rule_based_answer(question: str, df: pd.DataFrame) -> str:
+    """Return a data-driven answer without any external API."""
+    q = question.lower()
+    total = len(df)
+
+    # ── Workload / engineer queries ────────────────────────────────────────────
+    if any(w in q for w in ["workload", "load", "busy", "overload", "engineer",
+                             "who has", "lightest", "heaviest", "most tickets",
+                             "fewest tickets", "redistribute", "rebalance"]):
+        eng = (df[df["Assigned To Clean"] != ""]
+               .groupby("Assigned To Clean").size()
+               .sort_values(ascending=False))
+        if eng.empty:
+            return "No engineers have assigned tickets in the current dataset."
+        lightest = eng.index[-1]
+        lightest_cnt = int(eng.iloc[-1])
+        heaviest = eng.index[0]
+        heaviest_cnt = int(eng.iloc[0])
+        overloaded = eng[eng > 10]
+        optimal    = eng[eng <= 5]
+        lines = [
+            f"## Engineer Workload Summary",
+            f"- **Most loaded:** {heaviest} — **{heaviest_cnt} tickets**",
+            f"- **Lightest load:** {lightest} — **{lightest_cnt} tickets** ← best for new assignments",
+            f"- **Overloaded (>10):** {len(overloaded)} engineers",
+            f"- **Optimal (≤5):** {len(optimal)} engineers",
+            "",
+            "**Top 5 engineers by ticket count:**",
+        ]
+        for eng_name, cnt in eng.head(5).items():
+            badge = " 🔴 Overloaded" if cnt > 10 else (" 🟡 Moderate" if cnt > 5 else " 🟢 Optimal")
+            lines.append(f"  - {eng_name}: {cnt}{badge}")
+        if "lightest" in q or "recommend" in q or "new" in q:
+            lines += ["", f"**Recommendation:** Assign new tickets to **{lightest}** "
+                          f"(only {lightest_cnt} active tickets)."]
+        return "\n".join(lines)
+
+    # ── SLA / breach queries ───────────────────────────────────────────────────
+    if any(w in q for w in ["sla", "breach", "overdue", "late", "compliance",
+                             "deadline", "on time", "on-time"]):
+        breached   = int(df["SLA Breached"].sum())
+        breach_pct = breached / total * 100 if total else 0
+        by_prio    = df.groupby("Priority").agg(
+            Total=("Request ID","count"), Breached=("SLA Breached","sum")
+        ).reindex(["Critical","High","Medium","Low"]).fillna(0)
+        by_type    = (df[df["SLA Breached"]]
+                      .groupby("Request Type").size()
+                      .sort_values(ascending=False).head(5))
+        lines = [
+            f"## SLA Performance Analysis",
+            f"- **Overall breach rate:** {breach_pct:.1f}% ({breached} of {total} tickets)",
+            f"- **On-time tickets:** {total - breached} ({(total-breached)/total*100:.0f}%)",
+            "",
+            "**By Priority:**",
+        ]
+        for prio in ["Critical","High","Medium","Low"]:
+            if prio in by_prio.index:
+                t = int(by_prio.loc[prio,"Total"])
+                b = int(by_prio.loc[prio,"Breached"])
+                pct = b/t*100 if t else 0
+                icon = "🔴" if pct > 40 else ("🟡" if pct > 20 else "🟢")
+                lines.append(f"  - {icon} **{prio}:** {b}/{t} breached ({pct:.0f}%)")
+        if not by_type.empty:
+            lines += ["", "**Most breached request types:**"]
+            for rt, cnt in by_type.items():
+                lines.append(f"  - {rt}: {cnt} breaches")
+        if breach_pct > 30:
+            lines += ["", "**Insight:** Breach rate is high. Focus on unassigned Critical/High "
+                          "tickets and ensure engineers are not overloaded."]
+        return "\n".join(lines)
+
+    # ── Unassigned / queue queries ─────────────────────────────────────────────
+    if any(w in q for w in ["unassigned", "queue", "no one", "nobody", "triage",
+                             "pending", "waiting", "assign"]):
+        unasgn = df[(df["State"] == "Pending for Review") & (df["Assigned To Clean"] == "")]
+        crit   = int((unasgn["Priority"] == "Critical").sum())
+        high   = int((unasgn["Priority"] == "High").sum())
+        breach = int(unasgn["SLA Breached"].sum())
+        eng    = (df[df["Assigned To Clean"] != ""]
+                  .groupby("Assigned To Clean").size()
+                  .sort_values())
+        lines = [
+            f"## Unassigned Queue",
+            f"- **Total unassigned:** {len(unasgn)} tickets",
+            f"- **Critical unassigned:** {crit} 🔴 — immediate action needed",
+            f"- **High unassigned:** {high} 🟡",
+            f"- **Already SLA breached:** {breach} ⏰",
+        ]
+        if not eng.empty:
+            lightest = eng.index[0]
+            lightest_cnt = int(eng.iloc[0])
+            lines += ["", f"**Triage recommendation:** Start by assigning the {crit} Critical "
+                          f"tickets. **{lightest}** has the lightest load ({lightest_cnt} tickets) "
+                          f"and should be first choice."]
+        return "\n".join(lines)
+
+    # ── Assignment recommendation ──────────────────────────────────────────────
+    if any(w in q for w in ["recommend", "suggest", "best person", "who should",
+                             "ideal", "suitable", "right person"]):
+        eng = (df[df["Assigned To Clean"] != ""]
+               .groupby("Assigned To Clean").size()
+               .sort_values())
+        unasgn_cnt = int(((df["State"] == "Pending for Review") &
+                          (df["Assigned To Clean"] == "")).sum())
+        if eng.empty:
+            return "No engineer data available for recommendations."
+        top3 = eng.head(3)
+        lines = [
+            f"## Assignment Recommendations",
+            f"There are **{unasgn_cnt} unassigned tickets** pending triage.",
+            "",
+            "**Best available engineers (by lightest load):**",
+        ]
+        for i, (name, cnt) in enumerate(top3.items(), 1):
+            badge = "🟢 Optimal" if cnt <= 5 else "🟡 Moderate"
+            lines.append(f"  {i}. **{name}** — {cnt} active tickets ({badge})")
+        lines += ["", "Assign Critical/High SLA-breached tickets first to avoid further delays."]
+        return "\n".join(lines)
+
+    # ── Critical / urgent queries ──────────────────────────────────────────────
+    if any(w in q for w in ["critical", "urgent", "high priority", "most important",
+                             "immediate", "emergency"]):
+        crit_df  = df[df["Priority"] == "Critical"]
+        unasgn_c = int(((df["Priority"] == "Critical") &
+                         (df["Assigned To Clean"] == "")).sum())
+        breach_c = int(((df["Priority"] == "Critical") & df["SLA Breached"]).sum())
+        lines = [
+            f"## Critical Ticket Summary",
+            f"- **Total Critical tickets:** {len(crit_df)}",
+            f"- **Unassigned Critical:** {unasgn_c} 🔴",
+            f"- **Critical & SLA breached:** {breach_c} ⏰",
+            f"- **Critical on-time:** {len(crit_df) - breach_c}",
+        ]
+        if unasgn_c > 0:
+            lines += ["", f"**Action required:** {unasgn_c} Critical tickets have no owner. "
+                          "Assign immediately — SLA for Critical is **7 days**."]
+        return "\n".join(lines)
+
+    # ── Request type queries ───────────────────────────────────────────────────
+    if any(w in q for w in ["type", "request type", "dast", "sast", "oss", "masa",
+                             "sign off", "design review", "false positive", "breakdown"]):
+        rt = df["Request Type"].replace("", "Unknown").value_counts()
+        breach_rt = (df[df["SLA Breached"]].groupby("Request Type")
+                     .size().sort_values(ascending=False))
+        lines = [f"## Request Type Breakdown", ""]
+        for rtype, cnt in rt.head(8).items():
+            b = int(breach_rt.get(rtype, 0))
+            pct = b/cnt*100 if cnt else 0
+            icon = "🔴" if pct > 40 else ("🟡" if pct > 20 else "🟢")
+            lines.append(f"  - {icon} **{rtype}:** {cnt} tickets, {b} breached ({pct:.0f}%)")
+        worst = breach_rt.index[0] if not breach_rt.empty else "N/A"
+        lines += ["", f"**Worst SLA compliance:** {worst}"]
+        return "\n".join(lines)
+
+    # ── Group / team queries ───────────────────────────────────────────────────
+    if any(w in q for w in ["group", "team", "csappsec", "itssdlc", "cssdlc",
+                             "which team", "which group"]):
+        grp = df["Primary Group"].value_counts()
+        lines = [f"## Group Distribution", ""]
+        for g, cnt in grp.items():
+            b = int(df[df["Primary Group"] == g]["SLA Breached"].sum())
+            pct = b/cnt*100 if cnt else 0
+            lines.append(f"  - **{g}:** {cnt} tickets, {b} breached ({pct:.0f}%)")
+        return "\n".join(lines)
+
+    # ── Default: general overview ──────────────────────────────────────────────
+    breached   = int(df["SLA Breached"].sum())
+    breach_pct = breached / total * 100 if total else 0
+    unassigned = int((df["Assigned To Clean"] == "").sum())
+    closed     = int((df["State"] == "Closed").sum())
+    pending    = int((df["State"] == "Pending for Review").sum())
+    eng_count  = df[df["Assigned To Clean"] != ""]["Assigned To Clean"].nunique()
+    return (
+        f"## AppSec Dashboard Overview\n\n"
+        f"- **Total tickets:** {total:,}\n"
+        f"- **Pending for Review:** {pending} | **Closed:** {closed}\n"
+        f"- **Unassigned:** {unassigned} | **Active Engineers:** {eng_count}\n"
+        f"- **SLA Breach Rate:** {breach_pct:.1f}% ({breached} tickets)\n\n"
+        f"You can ask me about: **workload**, **SLA breaches**, **unassigned tickets**, "
+        f"**assignment recommendations**, **critical tickets**, **request types**, or **group distribution**."
+    )
+
+
 # ─── Page: AI Copilot Chat ─────────────────────────────────────────────────────
 
 def page_copilot(df: pd.DataFrame):
-    st.markdown(page_banner(
-        "AI Copilot",
-        "Ask anything about your AppSec ticket pipeline — powered by Claude",
-        NEON_PURPLE), unsafe_allow_html=True)
-
-    if not ANTHROPIC_AVAILABLE:
-        st.markdown(
-            '<div class="alert-panel"><b>anthropic package not installed.</b><br>'
-            'Run: <code>pip install anthropic</code> then restart the app.</div>',
-            unsafe_allow_html=True)
-        return
-
-    # ── API key setup ──────────────────────────────────────────────────────────
     api_key = _get_api_key()
-    if not api_key:
-        st.markdown(
-            '<div class="warn-panel">No Anthropic API key found. '
-            'Enter your key below, or set the <b>ANTHROPIC_API_KEY</b> environment variable.</div>',
-            unsafe_allow_html=True)
-        with st.form("api_key_form", clear_on_submit=False):
-            key_input = st.text_input(
-                "Anthropic API Key", type="password",
-                placeholder="sk-ant-...",
-                help="Get your key at console.anthropic.com")
-            if st.form_submit_button("Save Key"):
-                if key_input.startswith("sk-"):
-                    st.session_state["anthropic_api_key"] = key_input
-                    st.success("API key saved for this session.")
-                    st.rerun()
-                else:
-                    st.error("Key must start with 'sk-'")
-        return
+    mode    = "claude" if (ANTHROPIC_AVAILABLE and api_key) else "local"
+
+    subtitle = ("Streaming responses via Claude — grounded in live ticket data"
+                if mode == "claude"
+                else "Rule-based intelligence engine — answers computed from live ticket data")
+    st.markdown(page_banner("AI Copilot", subtitle, NEON_PURPLE), unsafe_allow_html=True)
+
+    # ── Optional: Claude API key setup banner ──────────────────────────────────
+    if mode == "local":
+        with st.expander("Upgrade to Claude AI (optional — needs API key)", expanded=False):
+            st.markdown(
+                '<div class="info-panel">The copilot works fully without a key. '
+                'Add an Anthropic API key below to get richer conversational answers.</div>',
+                unsafe_allow_html=True)
+            with st.form("api_key_form", clear_on_submit=False):
+                key_input = st.text_input("Anthropic API Key", type="password",
+                                          placeholder="sk-ant-...")
+                if st.form_submit_button("Save Key"):
+                    if key_input.startswith("sk-"):
+                        st.session_state["anthropic_api_key"] = key_input
+                        st.success("Key saved. Reload the page to activate Claude mode.")
+                        st.rerun()
+                    else:
+                        st.error("Key must start with 'sk-'")
 
     # ── Init chat history ──────────────────────────────────────────────────────
     if "copilot_messages" not in st.session_state:
         st.session_state["copilot_messages"] = []
 
-    # Build system prompt once per session (or on data refresh)
-    if "copilot_context" not in st.session_state:
+    if mode == "claude" and "copilot_context" not in st.session_state:
         st.session_state["copilot_context"] = _build_data_context(df)
-
-    system_prompt = (
-        "You are the AppSec Operations Intelligence Copilot for a cybersecurity team. "
-        "You have deep expertise in Application Security, vulnerability management, "
-        "and security operations. You are concise, direct, and always ground your answers "
-        "in the live dashboard data provided below. When recommending engineer assignments, "
-        "consider current workload and ticket types. When discussing SLA, reference actual "
-        "breach numbers. Format responses in clean markdown — use bullet points and bold "
-        "for key figures. Never make up data not in the context.\n\n"
-        + st.session_state["copilot_context"]
-    )
 
     # ── Render existing chat ───────────────────────────────────────────────────
     for msg in st.session_state["copilot_messages"]:
@@ -1484,11 +1650,12 @@ def page_copilot(df: pd.DataFrame):
     if not st.session_state["copilot_messages"]:
         st.markdown(section_hdr("Suggested Questions", ""), unsafe_allow_html=True)
         suggestions = [
-            "Who has the lightest workload right now and can take a new Critical ticket?",
-            "Why are SLA breaches high? What should we do about it?",
+            "Who has the lightest workload right now?",
+            "What is our current SLA breach situation?",
             "Summarize all unassigned tickets and suggest a triage plan.",
             "Which request type has the worst SLA compliance?",
-            "Which engineer is most overloaded and what tickets can be redistributed?",
+            "Which engineer is most overloaded?",
+            "Give me an overview of the current dashboard.",
         ]
         cols = st.columns(2)
         for i, s in enumerate(suggestions):
@@ -1498,7 +1665,7 @@ def page_copilot(df: pd.DataFrame):
                         {"role": "user", "content": s})
                     st.rerun()
 
-    # ── Chat input ────────────────────────────────────────────────────────────
+    # ── Chat input ─────────────────────────────────────────────────────────────
     user_input = st.chat_input("Ask about your AppSec tickets...")
 
     if user_input:
@@ -1510,35 +1677,45 @@ def page_copilot(df: pd.DataFrame):
 
         with st.chat_message("assistant", avatar="🛡"):
             placeholder = st.empty()
-            full_response = ""
 
-            try:
-                client = _anthropic.Anthropic(api_key=api_key)
-                api_messages = [
-                    {"role": m["role"], "content": m["content"]}
-                    for m in st.session_state["copilot_messages"]
-                ]
-                with client.messages.stream(
-                    model="claude-sonnet-4-6",
-                    max_tokens=1024,
-                    system=system_prompt,
-                    messages=api_messages,
-                ) as stream:
-                    for chunk in stream.text_stream:
-                        full_response += chunk
-                        placeholder.markdown(full_response + "▌")
-                placeholder.markdown(full_response)
+            if mode == "claude":
+                # ── Claude streaming mode ──────────────────────────────────────
+                system_prompt = (
+                    "You are the AppSec Operations Intelligence Copilot for a cybersecurity team. "
+                    "Be concise, direct, and always ground your answers in the live dashboard data "
+                    "below. Format in clean markdown with bullet points and bold key figures. "
+                    "Never fabricate data not in the context.\n\n"
+                    + st.session_state["copilot_context"]
+                )
+                full_response = ""
+                try:
+                    client = _anthropic.Anthropic(api_key=api_key)
+                    api_messages = [{"role": m["role"], "content": m["content"]}
+                                    for m in st.session_state["copilot_messages"]]
+                    with client.messages.stream(
+                        model="claude-sonnet-4-6", max_tokens=1024,
+                        system=system_prompt, messages=api_messages,
+                    ) as stream:
+                        for chunk in stream.text_stream:
+                            full_response += chunk
+                            placeholder.markdown(full_response + "▌")
+                    placeholder.markdown(full_response)
+                    st.session_state["copilot_messages"].append(
+                        {"role": "assistant", "content": full_response})
+                except Exception as e:
+                    err = str(e)
+                    if "authentication" in err.lower() or "api_key" in err.lower():
+                        placeholder.error("Invalid API key — falling back to local mode.")
+                        st.session_state.pop("anthropic_api_key", None)
+                        st.session_state.pop("copilot_context", None)
+                    else:
+                        placeholder.error(f"Claude API error: {err}")
+            else:
+                # ── Rule-based local mode ──────────────────────────────────────
+                answer = _rule_based_answer(user_input, df)
+                placeholder.markdown(answer)
                 st.session_state["copilot_messages"].append(
-                    {"role": "assistant", "content": full_response})
-
-            except Exception as e:
-                err = str(e)
-                if "authentication" in err.lower() or "api_key" in err.lower():
-                    placeholder.error("Invalid API key. Please check your key in the setup section.")
-                    st.session_state.pop("anthropic_api_key", None)
-                    st.session_state.pop("copilot_context", None)
-                else:
-                    placeholder.error(f"Claude API error: {err}")
+                    {"role": "assistant", "content": answer})
 
     # ── Clear chat ─────────────────────────────────────────────────────────────
     if st.session_state["copilot_messages"]:
@@ -1549,117 +1726,197 @@ def page_copilot(df: pd.DataFrame):
             st.rerun()
 
 
-# ─── Page: Weekly Intelligence Briefing ───────────────────────────────────────
+# ─── Briefing: pure-Python template (no API key needed) ───────────────────────
 
-def page_briefing(df: pd.DataFrame):
-    st.markdown(page_banner(
-        "Weekly Intelligence Briefing",
-        "AI-generated operational briefing grounded in live ticket data",
-        NEON_GREEN), unsafe_allow_html=True)
+def _generate_template_briefing(df: pd.DataFrame, today: datetime) -> str:
+    """Build a complete professional briefing using only computed metrics."""
+    total      = len(df)
+    pending    = int((df["State"] == "Pending for Review").sum())
+    clarify    = int((df["State"] == "Sent for Clarification").sum())
+    closed     = int((df["State"] == "Closed").sum())
+    rejected   = int((df["State"] == "Rejected").sum())
+    unassigned = int((df["Assigned To Clean"] == "").sum())
+    breached   = int(df["SLA Breached"].sum())
+    breach_pct = breached / total * 100 if total else 0
+    on_time    = total - breached
+    avg_open   = df["Days Open"].mean()
+    closed_df  = df[df["State"] == "Closed"]
+    avg_res    = closed_df["Days Open"].mean() if not closed_df.empty else 0.0
 
-    if not ANTHROPIC_AVAILABLE:
-        st.markdown(
-            '<div class="alert-panel"><b>anthropic package not installed.</b><br>'
-            'Run: <code>pip install anthropic</code> then restart the app.</div>',
-            unsafe_allow_html=True)
-        return
-
-    api_key = _get_api_key()
-    if not api_key:
-        st.markdown(
-            '<div class="warn-panel">No Anthropic API key found. '
-            'Configure it first on the <b>AI Copilot</b> page.</div>',
-            unsafe_allow_html=True)
-        return
-
-    # ── Pre-compute all metrics to feed Claude ─────────────────────────────────
-    today       = datetime.now()
-    total       = len(df)
-    pending     = int((df["State"] == "Pending for Review").sum())
-    clarify     = int((df["State"] == "Sent for Clarification").sum())
-    closed      = int((df["State"] == "Closed").sum())
-    rejected    = int((df["State"] == "Rejected").sum())
-    unassigned  = int((df["Assigned To Clean"] == "").sum())
-    breached    = int(df["SLA Breached"].sum())
-    breach_pct  = breached / total * 100 if total else 0
-    avg_open    = df["Days Open"].mean()
-    closed_df   = df[df["State"] == "Closed"]
-    avg_res     = closed_df["Days Open"].mean() if not closed_df.empty else 0
-
-    # Workload summary
-    eng_load = (df[df["Assigned To Clean"] != ""]
-                .groupby("Assigned To Clean").size()
-                .sort_values(ascending=False))
+    eng_load   = (df[df["Assigned To Clean"] != ""]
+                  .groupby("Assigned To Clean").size()
+                  .sort_values(ascending=False))
     overloaded  = int((eng_load > 10).sum())
     optimal     = int((eng_load <= 5).sum())
-    top_eng     = eng_load.index[0] if not eng_load.empty else "N/A"
+    top_eng     = eng_load.index[0]  if not eng_load.empty else "N/A"
     top_eng_cnt = int(eng_load.iloc[0]) if not eng_load.empty else 0
+    light_eng   = eng_load.index[-1] if not eng_load.empty else "N/A"
+    light_cnt   = int(eng_load.iloc[-1]) if not eng_load.empty else 0
 
-    # Top request types
-    top_types = df["Request Type"].replace("", "Unknown").value_counts().head(5)
-
-    # SLA by priority
-    sla_df = df.groupby("Priority").agg(
-        Total=("Request ID", "count"),
-        Breached=("SLA Breached", "sum")
-    ).reindex(["Critical", "High", "Medium", "Low"]).fillna(0)
-
-    # Unassigned critical count
     crit_unasgn = int(((df["Assigned To Clean"] == "") & (df["Priority"] == "Critical")).sum())
     high_unasgn = int(((df["Assigned To Clean"] == "") & (df["Priority"] == "High")).sum())
 
-    # Top SLA-breached request types
-    breach_by_type = (df[df["SLA Breached"]]
-                      .groupby("Request Type").size()
-                      .sort_values(ascending=False).head(3))
+    sla_df     = df.groupby("Priority").agg(
+        Total=("Request ID","count"), Breached=("SLA Breached","sum")
+    ).reindex(["Critical","High","Medium","Low"]).fillna(0)
 
-    metrics_text = f"""
-BRIEFING INPUT METRICS — {today.strftime('%A, %d %B %Y')}
+    top_types  = df["Request Type"].replace("","Unknown").value_counts().head(5)
+    breach_by_type = (df[df["SLA Breached"]].groupby("Request Type")
+                      .size().sort_values(ascending=False))
+    worst_type = breach_by_type.index[0] if not breach_by_type.empty else "N/A"
 
-VOLUME
-- Total active tickets: {total}
-- Pending for Review: {pending} ({pending/total*100:.0f}%)
-- Sent for Clarification: {clarify}
-- Closed: {closed} ({closed/total*100:.0f}%)
-- Rejected: {rejected}
+    health = "CRITICAL" if breach_pct > 40 else ("AT RISK" if breach_pct > 20 else "HEALTHY")
+    health_icon = "🔴" if health == "CRITICAL" else ("🟡" if health == "AT RISK" else "🟢")
 
-SLA PERFORMANCE
-- Overall breach rate: {breach_pct:.1f}% ({breached} tickets)
-- Average days open (all tickets): {avg_open:.1f} days
-- Average resolution time (closed): {avg_res:.1f} days
-- SLA by priority: {"; ".join([f"{p}: {int(sla_df.loc[p,'Breached'])}/{int(sla_df.loc[p,'Total'])} breached" for p in ['Critical','High','Medium','Low'] if p in sla_df.index])}
-- Top breach types: {", ".join([f"{rt} ({cnt})" for rt, cnt in breach_by_type.items()])}
+    # Build recommended actions
+    actions = []
+    if crit_unasgn > 0:
+        actions.append(f"Immediately assign the **{crit_unasgn} unassigned Critical ticket(s)** "
+                       f"— assign to {light_eng} (lightest load: {light_cnt} tickets).")
+    if high_unasgn > 0:
+        actions.append(f"Process **{high_unasgn} unassigned High tickets** before end of week "
+                       f"to avoid SLA escalation (SLA = 14 days).")
+    if overloaded > 0:
+        actions.append(f"Rebalance workload — **{overloaded} engineer(s) have >10 tickets**. "
+                       f"Redistribute to engineers with ≤5 tickets ({optimal} available).")
+    if breach_pct > 20:
+        actions.append(f"**{worst_type}** has the highest SLA breach count — "
+                       f"review if resource allocation matches volume for this type.")
+    if not actions:
+        actions.append("No urgent actions identified. Maintain current assignment cadence.")
 
-WORKLOAD
-- Total unassigned tickets: {unassigned}
-- Unassigned Critical: {crit_unasgn}
-- Unassigned High: {high_unasgn}
-- Engineers with >10 tickets (overloaded): {overloaded}
-- Engineers with <=5 tickets (optimal): {optimal}
-- Most loaded engineer: {top_eng} ({top_eng_cnt} tickets)
+    lines = [
+        f"# AppSec Weekly Intelligence Briefing",
+        f"**{today.strftime('%A, %d %B %Y')}** | Auto-generated from live ServiceNow data",
+        f"",
+        f"---",
+        f"",
+        f"## 1. Executive Summary",
+        f"",
+        f"The AppSec operations pipeline currently holds **{total:,} tickets** with an overall "
+        f"SLA compliance health of **{health_icon} {health}** ({breach_pct:.1f}% breach rate). "
+        f"There are **{unassigned} unassigned tickets** ({crit_unasgn} Critical, {high_unasgn} High) "
+        f"requiring immediate triage. "
+        + (f"Workload is unevenly distributed with {overloaded} engineer(s) overloaded."
+           if overloaded > 0 else "Engineer workload is within acceptable range."),
+        f"",
+        f"---",
+        f"",
+        f"## 2. Volume & Pipeline",
+        f"",
+        f"| Status | Count | % of Total |",
+        f"|--------|-------|------------|",
+        f"| Pending for Review | {pending} | {pending/total*100:.0f}% |",
+        f"| Sent for Clarification | {clarify} | {clarify/total*100:.0f}% |",
+        f"| Closed | {closed} | {closed/total*100:.0f}% |",
+        f"| Rejected | {rejected} | {rejected/total*100:.0f}% |",
+        f"| **Total** | **{total}** | 100% |",
+        f"",
+        f"**Top request types by volume:**",
+    ]
+    for rt, cnt in top_types.items():
+        pct = cnt/total*100
+        lines.append(f"- {rt}: **{cnt}** ({pct:.0f}%)")
 
-TOP REQUEST TYPES
-{chr(10).join([f"- {rt}: {cnt}" for rt, cnt in top_types.items()])}
-"""
+    lines += [
+        f"",
+        f"---",
+        f"",
+        f"## 3. SLA Performance",
+        f"",
+        f"- **Overall breach rate:** {breach_pct:.1f}% — **{breached}** breached, "
+        f"**{on_time}** on-time",
+        f"- **Average days open (all tickets):** {avg_open:.1f} days",
+        f"- **Average resolution time (closed):** {avg_res:.1f} days",
+        f"",
+        f"**SLA compliance by priority:**",
+        f"",
+        f"| Priority | SLA Threshold | Total | Breached | Compliance |",
+        f"|----------|---------------|-------|----------|------------|",
+    ]
+    thresholds = {"Critical": "7d", "High": "14d", "Medium": "21d", "Low": "30d"}
+    for prio in ["Critical", "High", "Medium", "Low"]:
+        if prio in sla_df.index:
+            t  = int(sla_df.loc[prio, "Total"])
+            b  = int(sla_df.loc[prio, "Breached"])
+            ok = t - b
+            cp = ok/t*100 if t else 100
+            icon = "🔴" if cp < 60 else ("🟡" if cp < 80 else "🟢")
+            lines.append(f"| {icon} {prio} | {thresholds[prio]} | {t} | {b} | {cp:.0f}% |")
 
-    briefing_prompt = f"""You are a senior AppSec Operations lead writing the weekly status briefing for
-your security team and management. Based strictly on the metrics below, write a professional
-weekly intelligence briefing.
+    lines += [
+        f"",
+        f"**Most breached request type:** {worst_type} ({int(breach_by_type.iloc[0]) if not breach_by_type.empty else 0} breaches)",
+        f"",
+        f"---",
+        f"",
+        f"## 4. Workload & Capacity",
+        f"",
+        f"- **Unassigned tickets:** {unassigned} total ({crit_unasgn} Critical, {high_unasgn} High)",
+        f"- **Overloaded engineers (>10 tickets):** {overloaded}",
+        f"- **Optimal load engineers (≤5 tickets):** {optimal}",
+        f"- **Most loaded:** {top_eng} ({top_eng_cnt} tickets)",
+        f"- **Available capacity:** {light_eng} ({light_cnt} tickets — best for new assignments)",
+        f"",
+        f"---",
+        f"",
+        f"## 5. Top Risks This Week",
+        f"",
+    ]
+    risks = []
+    if crit_unasgn > 0:
+        risks.append(f"**{crit_unasgn} unassigned Critical tickets** — each has a 7-day SLA, "
+                     f"immediate assignment required.")
+    if breach_pct > 30:
+        risks.append(f"**SLA breach rate at {breach_pct:.1f}%** — above acceptable threshold. "
+                     f"Escalation risk if not addressed this week.")
+    if overloaded > 0:
+        risks.append(f"**{overloaded} engineers are overloaded** — burnout and ticket quality "
+                     f"risk. Rebalancing needed.")
+    risks.append(f"**{worst_type}** continues to accumulate SLA breaches — "
+                 f"review resourcing for this type.")
+    for i, r in enumerate(risks, 1):
+        lines.append(f"{i}. {r}")
 
-Structure it as:
-1. **EXECUTIVE SUMMARY** (2-3 sentences capturing the most critical situation)
-2. **VOLUME & PIPELINE** (ticket volume, state breakdown, trends to note)
-3. **SLA PERFORMANCE** (breach analysis, worst performing areas, compliance health)
-4. **WORKLOAD & CAPACITY** (engineer load, unassigned queue urgency)
-5. **TOP RISKS THIS WEEK** (numbered list of the 3-4 most urgent things needing action)
-6. **RECOMMENDED ACTIONS** (numbered, specific, actionable — assign owners if clear from data)
+    lines += [
+        f"",
+        f"---",
+        f"",
+        f"## 6. Recommended Actions",
+        f"",
+    ]
+    for i, a in enumerate(actions, 1):
+        lines.append(f"{i}. {a}")
 
-Tone: professional, data-driven, concise. Use bold for critical numbers.
-Do NOT add information not in the metrics. Be direct — skip filler phrases.
+    lines += [
+        f"",
+        f"---",
+        f"",
+        f"*Briefing generated automatically from live ServiceNow data — "
+        f"{today.strftime('%d %b %Y %H:%M')}*",
+    ]
+    return "\n".join(lines)
 
-{metrics_text}"""
 
-    # ── Show preview KPIs ──────────────────────────────────────────────────────
+# ─── Page: Weekly Intelligence Briefing ───────────────────────────────────────
+
+def page_briefing(df: pd.DataFrame):
+    today = datetime.now()
+    st.markdown(page_banner(
+        "Weekly Intelligence Briefing",
+        "Operational briefing auto-generated from live ticket data — no API key required",
+        NEON_GREEN), unsafe_allow_html=True)
+
+    # ── KPI preview ────────────────────────────────────────────────────────────
+    total      = len(df)
+    breached   = int(df["SLA Breached"].sum())
+    breach_pct = breached / total * 100 if total else 0
+    unassigned = int((df["Assigned To Clean"] == "").sum())
+    crit_unasgn= int(((df["Assigned To Clean"] == "") & (df["Priority"] == "Critical")).sum())
+    eng_load   = (df[df["Assigned To Clean"] != ""]
+                  .groupby("Assigned To Clean").size())
+    overloaded = int((eng_load > 10).sum())
+
     render_kpis([
         (f"{total:,}",         "Total Tickets",    NEON_BLUE,   "📋", ""),
         (f"{breach_pct:.1f}%", "SLA Breach Rate",  NEON_RED,    "🚨", f"{breached} tickets"),
@@ -1669,35 +1926,55 @@ Do NOT add information not in the metrics. Be direct — skip filler phrases.
 
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
-    # ── Generate / show briefing ───────────────────────────────────────────────
+    # ── Generate button ────────────────────────────────────────────────────────
     col_btn, col_info = st.columns([1, 3])
     with col_btn:
         generate = st.button("Generate Briefing", key="gen_brief", use_container_width=True)
     with col_info:
+        api_key = _get_api_key()
+        mode_label = "Claude AI (enhanced)" if (ANTHROPIC_AVAILABLE and api_key) else "Template engine (instant, no key needed)"
         st.markdown(
             f"<div style='padding:10px 0;font-size:0.82rem;color:#6c7a9c'>"
-            f"Generates a full executive briefing for <b style='color:#cdd6f4'>"
-            f"{today.strftime('%d %b %Y')}</b> grounded in live ticket data.</div>",
+            f"Mode: <b style='color:#cdd6f4'>{mode_label}</b> &nbsp;|&nbsp; "
+            f"Date: <b style='color:#cdd6f4'>{today.strftime('%d %b %Y')}</b></div>",
             unsafe_allow_html=True)
 
+    # Show cached briefing if already generated
     if "briefing_output" in st.session_state and not generate:
         _render_briefing_output(st.session_state["briefing_output"], today)
 
     if generate:
         st.session_state.pop("briefing_output", None)
-        with st.spinner("Generating briefing with Claude..."):
-            try:
-                client  = _anthropic.Anthropic(api_key=api_key)
-                message = client.messages.create(
-                    model="claude-sonnet-4-6",
-                    max_tokens=2048,
-                    messages=[{"role": "user", "content": briefing_prompt}],
-                )
-                result = message.content[0].text
-                st.session_state["briefing_output"] = result
-                _render_briefing_output(result, today)
-            except Exception as e:
-                st.error(f"Claude API error: {e}")
+        api_key = _get_api_key()
+
+        if ANTHROPIC_AVAILABLE and api_key:
+            # ── Claude mode ────────────────────────────────────────────────────
+            with st.spinner("Generating briefing with Claude..."):
+                try:
+                    metrics = _build_data_context(df)
+                    prompt  = (
+                        "Write a professional weekly AppSec ops briefing with these sections: "
+                        "1) Executive Summary 2) Volume & Pipeline 3) SLA Performance "
+                        "4) Workload & Capacity 5) Top Risks 6) Recommended Actions. "
+                        "Be concise, use bold for key figures, base everything on data below.\n\n"
+                        + metrics)
+                    client  = _anthropic.Anthropic(api_key=api_key)
+                    message = client.messages.create(
+                        model="claude-sonnet-4-6", max_tokens=2048,
+                        messages=[{"role": "user", "content": prompt}])
+                    result  = message.content[0].text
+                    st.session_state["briefing_output"] = result
+                    _render_briefing_output(result, today)
+                except Exception as e:
+                    st.warning(f"Claude error ({e}). Falling back to template mode.")
+                    result = _generate_template_briefing(df, today)
+                    st.session_state["briefing_output"] = result
+                    _render_briefing_output(result, today)
+        else:
+            # ── Template mode (instant, no key) ────────────────────────────────
+            result = _generate_template_briefing(df, today)
+            st.session_state["briefing_output"] = result
+            _render_briefing_output(result, today)
 
 
 def _render_briefing_output(text: str, today: datetime):
@@ -1983,23 +2260,29 @@ def render_sidebar():
             "Unassigned Queue",
             "Ticket Tracker",
             "SLA & Analytics",
-        ], label_visibility="collapsed", key="nav")
-
-        st.markdown(
-            '<div style="margin:8px 0 2px;border-top:1px solid rgba(180,79,255,0.2);'
-            'padding-top:8px;font-size:0.58rem;letter-spacing:0.18em;text-transform:uppercase;'
-            'color:#b44fff;padding:8px 4px 2px">AI Agents</div>',
-            unsafe_allow_html=True)
-        agent_page = st.radio("Agent Navigation", [
             "AI Copilot",
             "Weekly Briefing",
             "ServiceNow Sync",
-        ], label_visibility="collapsed", key="nav_agent",
-            index=None)  # no default selection — user must click
+        ], label_visibility="collapsed", key="nav")
 
-        # Whichever was clicked last wins; agent pages take precedence when selected
-        if agent_page is not None:
-            page = agent_page
+        # Inject a visual divider + label between item 5 and 6 via CSS nth-child
+        st.markdown("""
+        <style>
+        [data-testid="stSidebar"] .stRadio > div > label:nth-child(6) {
+            margin-top: 10px !important;
+            border-top: 1px solid rgba(180,79,255,0.25) !important;
+            padding-top: 10px !important;
+        }
+        [data-testid="stSidebar"] .stRadio > div > label:nth-child(6)::before {
+            content: "AI AGENTS";
+            display: block;
+            font-size: 0.55rem;
+            letter-spacing: 0.18em;
+            color: #b44fff;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+        </style>""", unsafe_allow_html=True)
 
         st.markdown('<div style="margin:16px 0;border-top:1px solid rgba(0,212,255,0.08)"></div>',
                     unsafe_allow_html=True)
