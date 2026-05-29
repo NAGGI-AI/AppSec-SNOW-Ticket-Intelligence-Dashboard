@@ -375,21 +375,36 @@ p, li, label {{ color: var(--text) !important; }}
 }}
 
 /* ── Chat input dark theme ── */
-[data-testid="stChatInput"] {{
-    background: rgba(13,21,38,0.97) !important;
-    border: 1px solid rgba(180,79,255,0.35) !important;
-    border-radius: 14px !important;
-    box-shadow: 0 0 28px rgba(180,79,255,0.1), inset 0 1px 0 rgba(180,79,255,0.08) !important;
+[data-testid="stChatInput"],
+[data-testid="stChatInput"] > div,
+[data-testid="stChatInput"] > div > div,
+[class*="stChatInput"],
+section[data-testid="stBottom"],
+section[data-testid="stBottom"] > div,
+section[data-testid="stBottom"] > div > div {{
+    background: #0d1526 !important;
+    background-color: #0d1526 !important;
 }}
-[data-testid="stChatInput"] textarea {{
+[data-testid="stChatInput"] {{
+    border: 1px solid rgba(180,79,255,0.45) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 0 28px rgba(180,79,255,0.12), inset 0 1px 0 rgba(180,79,255,0.08) !important;
+}}
+[data-testid="stChatInput"] textarea,
+[data-testid="stChatInput"] input {{
     color: #e2eaf8 !important;
-    background: transparent !important;
+    background: #0d1526 !important;
+    background-color: #0d1526 !important;
     font-size: 0.88rem !important;
     caret-color: {NEON_PURPLE} !important;
+    -webkit-box-shadow: 0 0 0 1000px #0d1526 inset !important;
+    -webkit-text-fill-color: #e2eaf8 !important;
 }}
-[data-testid="stChatInput"] textarea::placeholder {{
+[data-testid="stChatInput"] textarea::placeholder,
+[data-testid="stChatInput"] input::placeholder {{
     color: #6c7a9c !important;
     font-style: italic !important;
+    -webkit-text-fill-color: #6c7a9c !important;
 }}
 [data-testid="stChatInput"] button {{
     background: rgba(180,79,255,0.2) !important;
@@ -1482,8 +1497,11 @@ def _rule_based_answer(question: str, df: pd.DataFrame) -> str:
 
     # ── Workload / engineer queries ────────────────────────────────────────────
     if any(w in q for w in ["workload", "load", "busy", "overload", "engineer",
-                             "who has", "lightest", "heaviest", "most tickets",
-                             "fewest tickets", "redistribute", "rebalance"]):
+                             "who has", "who have", "who having", "who is",
+                             "lightest", "heaviest", "most ticket", "fewest ticket",
+                             "more ticket", "number of ticket", "ticket count",
+                             "more number", "most number", "highest ticket",
+                             "redistribute", "rebalance"]):
         eng = (df[df["Assigned To Clean"] != ""]
                .groupby("Assigned To Clean").size()
                .sort_values(ascending=False))
@@ -1744,8 +1762,15 @@ def page_copilot(df: pd.DataFrame):
     if mode == "claude" and "copilot_context" not in st.session_state:
         st.session_state["copilot_context"] = _build_data_context(df)
 
-    # ── Welcome state — shown only when chat is empty ──────────────────────────
-    if not st.session_state["copilot_messages"]:
+    # ── Capture ALL question sources FIRST (before any rendering decisions) ───
+    # st.chat_input is sticky at the bottom regardless of where it's called
+    user_input = st.chat_input("Ask about your AppSec tickets — workload, SLA, assignments...")
+    # Suggestion buttons set _copilot_pending; consume it here on the rerun they trigger
+    pending_q = st.session_state.pop("_copilot_pending", None)
+    question = pending_q or user_input  # whichever arrived this frame
+
+    # ── Welcome state — shown ONLY when chat is truly empty AND no question ────
+    if not st.session_state["copilot_messages"] and not question:
         st.markdown(f"""
         <div style='text-align:center;padding:20px 0 10px'>
             <div style='font-size:2.4rem;margin-bottom:8px'>🛡</div>
@@ -1762,17 +1787,17 @@ def page_copilot(df: pd.DataFrame):
         st.markdown(section_hdr("Suggested Questions — click to ask", ""), unsafe_allow_html=True)
 
         suggestions = [
-            ("👷", "Workload",     "Who has the lightest workload right now?"),
-            ("🚨", "SLA Breach",   "What is our current SLA breach situation?"),
-            ("📭", "Unassigned",   "Summarize all unassigned tickets and suggest a triage plan."),
-            ("📊", "Request Types","Which request type has the worst SLA compliance?"),
-            ("🔴", "Overloaded",   "Which engineer is most overloaded?"),
-            ("📋", "Overview",     "Give me an overview of the current dashboard."),
+            ("👷", "Workload",      "Who has the lightest workload right now?"),
+            ("🚨", "SLA Breach",    "What is our current SLA breach situation?"),
+            ("📭", "Unassigned",    "Summarize all unassigned tickets and suggest a triage plan."),
+            ("📊", "Request Types", "Which request type has the worst SLA compliance?"),
+            ("🔴", "Overloaded",    "Which engineer is most overloaded?"),
+            ("📋", "Overview",      "Give me an overview of the current dashboard."),
         ]
 
         col1, col2, col3 = st.columns(3)
         cols = [col1, col2, col3]
-        for i, (icon, label, question) in enumerate(suggestions):
+        for i, (icon, label, sug_q) in enumerate(suggestions):
             with cols[i % 3]:
                 st.markdown(f"""
                 <div style='background:rgba(180,79,255,0.05);
@@ -1785,78 +1810,77 @@ def page_copilot(df: pd.DataFrame):
                         {icon} {label}</span>
                 </div>
                 """, unsafe_allow_html=True)
-                if st.button(question, key=f"sug_{i}", use_container_width=True):
-                    st.session_state["copilot_messages"].append(
-                        {"role": "user", "content": question})
-                    st.rerun()
+                # Set pending and let the button-triggered rerun handle response generation
+                if st.button(sug_q, key=f"sug_{i}", use_container_width=True):
+                    st.session_state["_copilot_pending"] = sug_q
 
         st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
-    # ── Render existing chat messages ──────────────────────────────────────────
-    for msg in st.session_state["copilot_messages"]:
-        with st.chat_message(msg["role"],
-                             avatar="🛡" if msg["role"] == "assistant" else "👤"):
-            st.markdown(msg["content"])
+    else:
+        # ── Render existing chat messages ──────────────────────────────────────
+        for msg in st.session_state["copilot_messages"]:
+            with st.chat_message(msg["role"],
+                                 avatar="🛡" if msg["role"] == "assistant" else "👤"):
+                st.markdown(msg["content"])
 
-    # ── Chat input ─────────────────────────────────────────────────────────────
-    user_input = st.chat_input("Ask about your AppSec tickets — workload, SLA, assignments...")
+        # ── Generate response for the incoming question ────────────────────────
+        if question:
+            # Show user message
+            with st.chat_message("user", avatar="👤"):
+                st.markdown(question)
+            st.session_state["copilot_messages"].append(
+                {"role": "user", "content": question})
 
-    if user_input:
-        st.session_state["copilot_messages"].append(
-            {"role": "user", "content": user_input})
+            # Generate and show assistant response
+            with st.chat_message("assistant", avatar="🛡"):
+                placeholder = st.empty()
 
-        with st.chat_message("user", avatar="👤"):
-            st.markdown(user_input)
-
-        with st.chat_message("assistant", avatar="🛡"):
-            placeholder = st.empty()
-
-            if mode == "claude":
-                system_prompt = (
-                    "You are the AppSec Operations Intelligence Copilot for a cybersecurity team. "
-                    "Be concise, direct, and always ground your answers in the live dashboard data "
-                    "below. Format in clean markdown with bullet points and bold key figures. "
-                    "Never fabricate data not in the context.\n\n"
-                    + st.session_state["copilot_context"]
-                )
-                full_response = ""
-                try:
-                    client = _anthropic.Anthropic(api_key=api_key)
-                    api_messages = [{"role": m["role"], "content": m["content"]}
-                                    for m in st.session_state["copilot_messages"]]
-                    with client.messages.stream(
-                        model="claude-sonnet-4-6", max_tokens=1024,
-                        system=system_prompt, messages=api_messages,
-                    ) as stream:
-                        for chunk in stream.text_stream:
-                            full_response += chunk
-                            placeholder.markdown(full_response + "▌")
-                    placeholder.markdown(full_response)
+                if mode == "claude":
+                    system_prompt = (
+                        "You are the AppSec Operations Intelligence Copilot for a cybersecurity team. "
+                        "Be concise, direct, and always ground your answers in the live dashboard data "
+                        "below. Format in clean markdown with bullet points and bold key figures. "
+                        "Never fabricate data not in the context.\n\n"
+                        + st.session_state["copilot_context"]
+                    )
+                    full_response = ""
+                    try:
+                        client = _anthropic.Anthropic(api_key=api_key)
+                        api_messages = [{"role": m["role"], "content": m["content"]}
+                                        for m in st.session_state["copilot_messages"]]
+                        with client.messages.stream(
+                            model="claude-sonnet-4-6", max_tokens=1024,
+                            system=system_prompt, messages=api_messages,
+                        ) as stream:
+                            for chunk in stream.text_stream:
+                                full_response += chunk
+                                placeholder.markdown(full_response + "▌")
+                        placeholder.markdown(full_response)
+                        st.session_state["copilot_messages"].append(
+                            {"role": "assistant", "content": full_response})
+                    except Exception as e:
+                        err = str(e)
+                        if "authentication" in err.lower() or "api_key" in err.lower():
+                            placeholder.error("Invalid API key — falling back to local mode.")
+                            st.session_state.pop("anthropic_api_key", None)
+                            st.session_state.pop("copilot_context", None)
+                        else:
+                            placeholder.error(f"Claude API error: {err}")
+                else:
+                    answer = _rule_based_answer(question, df)
+                    placeholder.markdown(answer)
                     st.session_state["copilot_messages"].append(
-                        {"role": "assistant", "content": full_response})
-                except Exception as e:
-                    err = str(e)
-                    if "authentication" in err.lower() or "api_key" in err.lower():
-                        placeholder.error("Invalid API key — falling back to local mode.")
-                        st.session_state.pop("anthropic_api_key", None)
-                        st.session_state.pop("copilot_context", None)
-                    else:
-                        placeholder.error(f"Claude API error: {err}")
-            else:
-                answer = _rule_based_answer(user_input, df)
-                placeholder.markdown(answer)
-                st.session_state["copilot_messages"].append(
-                    {"role": "assistant", "content": answer})
+                        {"role": "assistant", "content": answer})
 
-    # ── Clear chat ─────────────────────────────────────────────────────────────
-    if st.session_state["copilot_messages"]:
-        st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-        col_clr, _ = st.columns([1, 5])
-        with col_clr:
-            if st.button("Clear Chat", key="copilot_clear", use_container_width=True):
-                st.session_state["copilot_messages"] = []
-                st.session_state.pop("copilot_context", None)
-                st.rerun()
+        # ── Clear chat ─────────────────────────────────────────────────────────
+        if st.session_state["copilot_messages"]:
+            st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+            col_clr, _ = st.columns([1, 5])
+            with col_clr:
+                if st.button("Clear Chat", key="copilot_clear", use_container_width=True):
+                    st.session_state["copilot_messages"] = []
+                    st.session_state.pop("copilot_context", None)
+                    st.rerun()
 
 
 # ─── Briefing: pure-Python template (no API key needed) ───────────────────────
