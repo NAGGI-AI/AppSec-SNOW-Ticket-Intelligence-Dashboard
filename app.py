@@ -1491,63 +1491,249 @@ def _build_data_context(df: pd.DataFrame) -> str:
 # ─── AI Copilot: rule-based query engine (no API key required) ────────────────
 
 def _rule_based_answer(question: str, df: pd.DataFrame) -> str:
-    """Return a data-driven answer without any external API."""
-    q = question.lower()
+    """Intent+subject aware Q&A engine — no external API required."""
+    # ── Step 1: normalise typos & casing ──────────────────────────────────────
+    typo_map = {
+        "enginner": "engineer", "enginners": "engineers", "enginers": "engineer",
+        "engg": "engineer", "engr": "engineer",
+        "asignment": "assignment", "assignement": "assignment", "asign": "assign",
+        "critcal": "critical", "critial": "critical", "crital": "critical",
+        "breech": "breach", "breeches": "breaches",
+        "tickts": "tickets", "tciket": "ticket", "tcikets": "tickets",
+        "priortiy": "priority", "prioritiy": "priority",
+        "unasgn": "unassigned", "unassign": "unassigned",
+        "overlaod": "overload", "ovreload": "overload",
+        "recomend": "recommend", "reccomend": "recommend",
+    }
+    q = question.lower().strip()
+    for bad, good in typo_map.items():
+        q = q.replace(bad, good)
+
     total = len(df)
 
-    # ── Engineer list / directory queries (checked BEFORE generic workload) ───
-    if any(w in q for w in ["engineer list", "list of engineer", "all engineer",
-                             "show engineer", "engineer detail", "team list",
-                             "team member", "who are the", "list engineer",
-                             "engineer name", "full list", "complete list",
-                             "all team", "show team", "team detail"]):
-        eng = (df[df["Assigned To Clean"] != ""]
-               .groupby("Assigned To Clean").size()
-               .sort_values(ascending=False))
+    # ── Step 2: detect intent ─────────────────────────────────────────────────
+    is_count   = (q.startswith("how many") or q.startswith("how much")
+                  or "count" in q or "total number" in q or "number of" in q)
+    is_list    = (any(q.startswith(p) for p in ["list", "show", "give", "display",
+                                                  "get ", "fetch", "print", "tell me"])
+                  or any(p in q for p in ["all ", "complete ", "full ", "entire "]))
+    is_who     = q.startswith("who") or " who " in q
+    is_which   = q.startswith("which")
+    is_what    = any(q.startswith(p) for p in ["what is", "what are", "what's",
+                                                 "what was", "whats"])
+    is_summary = any(p in q for p in ["summary", "overview", "status", "report",
+                                       "brief", "dashboard", "situation"])
+
+    # ── Step 3: detect subject ────────────────────────────────────────────────
+    about_engineer  = any(w in q for w in ["engineer", "team member", "assignee",
+                                            "person", "people", "staff", "member"])
+    about_ticket    = any(w in q for w in ["ticket", "request", "issue", "case", "item"])
+    about_sla       = any(w in q for w in ["sla", "breach", "overdue", "deadline",
+                                            "late", "compliance", "on time", "on-time"])
+    about_unassigned= any(w in q for w in ["unassigned", "queue", "nobody", "no one",
+                                            "triage", "waiting", "not assigned"])
+    about_group     = any(w in q for w in ["group", "department", "csappsec",
+                                            "itssdlc", "cssdlc"])
+    about_critical  = any(w in q for w in ["critical", "urgent", "high priority",
+                                            "immediate", "emergency"])
+    about_reqtype   = any(w in q for w in ["type", "request type", "dast", "sast",
+                                            "oss", "masa", "sign off", "design review",
+                                            "false positive", "breakdown"])
+    about_workload  = any(w in q for w in ["workload", "load", "busy", "overload",
+                                            "overloaded", "lightest", "heaviest",
+                                            "redistribute", "rebalance",
+                                            "most ticket", "fewest ticket", "most load"])
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
+    def _eng_series():
+        return (df[df["Assigned To Clean"] != ""]
+                .groupby("Assigned To Clean").size()
+                .sort_values(ascending=False))
+
+    def _eng_table(eng):
+        lines = ["| # | Engineer | Tickets | Status |",
+                 "|---|----------|---------|--------|"]
+        for rank, (name, cnt) in enumerate(eng.items(), 1):
+            status = ("🔴 Overloaded" if cnt > 10
+                      else ("🟡 Moderate" if cnt > 5 else "🟢 Optimal"))
+            lines.append(f"| {rank} | {name} | {cnt} | {status} |")
+        return lines
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # INTENT × SUBJECT ROUTING
+    # ══════════════════════════════════════════════════════════════════════════
+
+    # ── "How many engineers …" ────────────────────────────────────────────────
+    if is_count and about_engineer:
+        eng = _eng_series()
+        count = len(eng)
+        overloaded = int((eng > 10).sum())
+        optimal    = int((eng <= 5).sum())
+        return (
+            f"## Engineer Count\n\n"
+            f"- **Total active engineers:** **{count}**\n"
+            f"- **Overloaded (>10 tickets):** {overloaded} engineers 🔴\n"
+            f"- **Moderate (6–10 tickets):** {int(((eng > 5) & (eng <= 10)).sum())} engineers 🟡\n"
+            f"- **Optimal (≤5 tickets):** {optimal} engineers 🟢\n\n"
+            f"Most loaded: **{eng.index[0]}** ({int(eng.iloc[0])} tickets) · "
+            f"Lightest: **{eng.index[-1]}** ({int(eng.iloc[-1])} tickets)"
+        )
+
+    # ── "How many tickets / total tickets" ────────────────────────────────────
+    if is_count and (about_ticket or not any([about_engineer, about_sla,
+                                               about_unassigned, about_group,
+                                               about_critical, about_reqtype])):
+        closed  = int((df["State"] == "Closed").sum())
+        pending = int((df["State"] == "Pending for Review").sum())
+        inprog  = int((df["State"] == "In Progress").sum())
+        breached= int(df["SLA Breached"].sum())
+        return (
+            f"## Ticket Count\n\n"
+            f"- **Total tickets:** **{total:,}**\n"
+            f"- **Pending for Review:** {pending}\n"
+            f"- **In Progress:** {inprog}\n"
+            f"- **Closed:** {closed}\n"
+            f"- **SLA Breached:** {breached} ({breached/total*100:.1f}%)"
+        )
+
+    # ── "How many unassigned …" ───────────────────────────────────────────────
+    if is_count and about_unassigned:
+        unasgn  = df[(df["State"] == "Pending for Review") & (df["Assigned To Clean"] == "")]
+        crit    = int((unasgn["Priority"] == "Critical").sum())
+        high    = int((unasgn["Priority"] == "High").sum())
+        breached= int(unasgn["SLA Breached"].sum())
+        return (
+            f"## Unassigned Ticket Count\n\n"
+            f"- **Total unassigned:** **{len(unasgn)}**\n"
+            f"- **Critical unassigned:** {crit} 🔴\n"
+            f"- **High unassigned:** {high} 🟡\n"
+            f"- **Already SLA breached:** {breached} ⏰"
+        )
+
+    # ── "How many critical …" ─────────────────────────────────────────────────
+    if is_count and about_critical:
+        for prio_label in ["Critical", "High", "Medium", "Low"]:
+            if prio_label.lower() in q:
+                cnt     = int((df["Priority"] == prio_label).sum())
+                breached= int(((df["Priority"] == prio_label) & df["SLA Breached"]).sum())
+                unasgn  = int(((df["Priority"] == prio_label) &
+                                (df["Assigned To Clean"] == "")).sum())
+                return (
+                    f"## {prio_label} Priority Tickets\n\n"
+                    f"- **Total {prio_label} tickets:** **{cnt}**\n"
+                    f"- **SLA breached:** {breached} ({breached/cnt*100:.0f}% of {prio_label})\n"
+                    f"- **Unassigned:** {unasgn}"
+                )
+        # generic "how many critical" without specifying which priority
+        crit_cnt = int((df["Priority"] == "Critical").sum())
+        return (f"## Critical Ticket Count\n\n- **Total Critical tickets:** **{crit_cnt}**\n"
+                f"- **Unassigned Critical:** "
+                f"{int(((df['Priority']=='Critical')&(df['Assigned To Clean']=='')).sum())} 🔴\n"
+                f"- **SLA breached:** "
+                f"{int(((df['Priority']=='Critical')&df['SLA Breached']).sum())} ⏰")
+
+    # ── "How many SLA breached …" ─────────────────────────────────────────────
+    if is_count and about_sla:
+        breached    = int(df["SLA Breached"].sum())
+        breach_pct  = breached / total * 100 if total else 0
+        return (
+            f"## SLA Breach Count\n\n"
+            f"- **SLA breached tickets:** **{breached}** out of {total:,}\n"
+            f"- **Breach rate:** {breach_pct:.1f}%\n"
+            f"- **On-time tickets:** {total - breached} ({100-breach_pct:.1f}%)"
+        )
+
+    # ── "List / show / give me engineers …" ──────────────────────────────────
+    if (is_list or is_who) and about_engineer and not about_workload:
+        eng = _eng_series()
         if eng.empty:
             return "No engineers found in the current dataset."
-        lines = [
-            f"## Engineer Directory  ({len(eng)} engineers)",
-            "",
-            "| # | Engineer | Tickets | Status |",
-            "|---|----------|---------|--------|",
-        ]
-        for rank, (name, cnt) in enumerate(eng.items(), 1):
-            if cnt > 10:
-                status = "🔴 Overloaded"
-            elif cnt > 5:
-                status = "🟡 Moderate"
-            else:
-                status = "🟢 Optimal"
-            lines.append(f"| {rank} | {name} | {cnt} | {status} |")
+        lines = [f"## Engineer Directory  ({len(eng)} engineers)", ""]
+        lines += _eng_table(eng)
         lines += [
             "",
-            f"**Total engineers:** {len(eng)}  |  "
+            f"**Total:** {len(eng)}  |  "
             f"**Overloaded (>10):** {int((eng > 10).sum())}  |  "
             f"**Optimal (≤5):** {int((eng <= 5).sum())}",
         ]
         return "\n".join(lines)
 
-    # ── Workload / engineer queries ────────────────────────────────────────────
-    if any(w in q for w in ["workload", "load", "busy", "overload", "engineer",
-                             "who has", "who have", "who having", "who is",
-                             "lightest", "heaviest", "most ticket", "fewest ticket",
-                             "more ticket", "number of ticket", "ticket count",
-                             "more number", "most number", "highest ticket",
-                             "redistribute", "rebalance"]):
-        eng = (df[df["Assigned To Clean"] != ""]
-               .groupby("Assigned To Clean").size()
-               .sort_values(ascending=False))
+    # ── "List / show groups …" ────────────────────────────────────────────────
+    if (is_list or is_what) and about_group:
+        grp = df["Primary Group"].value_counts()
+        lines = ["## Group Distribution", ""]
+        for g, cnt in grp.items():
+            b   = int(df[df["Primary Group"] == g]["SLA Breached"].sum())
+            pct = b / cnt * 100 if cnt else 0
+            lines.append(f"  - **{g}:** {cnt} tickets, {b} breached ({pct:.0f}%)")
+        return "\n".join(lines)
+
+    # ── "List / show request types …" ────────────────────────────────────────
+    if (is_list or is_what) and about_reqtype:
+        rt        = df["Request Type"].replace("", "Unknown").value_counts()
+        breach_rt = (df[df["SLA Breached"]].groupby("Request Type")
+                     .size().sort_values(ascending=False))
+        lines = ["## Request Type Breakdown", ""]
+        for rtype, cnt in rt.items():
+            b   = int(breach_rt.get(rtype, 0))
+            pct = b / cnt * 100 if cnt else 0
+            icon = "🔴" if pct > 40 else ("🟡" if pct > 20 else "🟢")
+            lines.append(f"  - {icon} **{rtype}:** {cnt} tickets, {b} breached ({pct:.0f}%)")
+        worst = breach_rt.index[0] if not breach_rt.empty else "N/A"
+        lines += ["", f"**Worst SLA compliance:** {worst}"]
+        return "\n".join(lines)
+
+    # ── "Who is most overloaded / heaviest workload" ──────────────────────────
+    if is_who and (about_workload or about_engineer or "overload" in q or
+                   "most" in q or "heaviest" in q or "highest" in q):
+        eng = _eng_series()
+        if eng.empty:
+            return "No engineer data available."
+        top = eng.index[0]
+        top_cnt = int(eng.iloc[0])
+        lines = [
+            f"## Most Overloaded Engineer",
+            f"- **{top}** has the highest ticket count — **{top_cnt} tickets** 🔴",
+            "",
+            "**Top 5 by ticket count:**",
+        ]
+        lines += [f"  - {n}: {c} {'🔴' if c > 10 else '🟡'}"
+                  for n, c in eng.head(5).items()]
+        return "\n".join(lines)
+
+    # ── "Who has lightest / fewest tickets / best for assignment" ─────────────
+    if is_who and any(p in q for p in ["lightest", "fewest", "least", "available",
+                                        "free", "recommend", "best for"]):
+        eng = _eng_series()
+        if eng.empty:
+            return "No engineer data available."
+        lightest     = eng.index[-1]
+        lightest_cnt = int(eng.iloc[-1])
+        return (
+            f"## Best Engineer for New Assignment\n\n"
+            f"**{lightest}** has the lightest load — only **{lightest_cnt} tickets**.\n\n"
+            f"Top 3 available engineers:\n"
+            + "\n".join(f"  - **{n}**: {c} tickets 🟢"
+                        for n, c in eng.tail(3).iloc[::-1].items())
+        )
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # SUBJECT-ONLY KEYWORD FALLBACKS (for broader/conversational queries)
+    # ══════════════════════════════════════════════════════════════════════════
+
+    # ── Workload / engineer subject ───────────────────────────────────────────
+    if about_engineer or about_workload:
+        eng = _eng_series()
         if eng.empty:
             return "No engineers have assigned tickets in the current dataset."
-        lightest = eng.index[-1]
+        lightest     = eng.index[-1]
         lightest_cnt = int(eng.iloc[-1])
-        heaviest = eng.index[0]
+        heaviest     = eng.index[0]
         heaviest_cnt = int(eng.iloc[0])
-        overloaded = eng[eng > 10]
-        optimal    = eng[eng <= 5]
+        overloaded   = eng[eng > 10]
+        optimal      = eng[eng <= 5]
         lines = [
-            f"## Engineer Workload Summary",
+            "## Engineer Workload Summary",
             f"- **Most loaded:** {heaviest} — **{heaviest_cnt} tickets**",
             f"- **Lightest load:** {lightest} — **{lightest_cnt} tickets** ← best for new assignments",
             f"- **Overloaded (>10):** {len(overloaded)} engineers",
@@ -1558,34 +1744,32 @@ def _rule_based_answer(question: str, df: pd.DataFrame) -> str:
         for eng_name, cnt in eng.head(5).items():
             badge = " 🔴 Overloaded" if cnt > 10 else (" 🟡 Moderate" if cnt > 5 else " 🟢 Optimal")
             lines.append(f"  - {eng_name}: {cnt}{badge}")
-        if "lightest" in q or "recommend" in q or "new" in q:
+        if any(p in q for p in ["lightest", "recommend", "new assign"]):
             lines += ["", f"**Recommendation:** Assign new tickets to **{lightest}** "
                           f"(only {lightest_cnt} active tickets)."]
         return "\n".join(lines)
 
-    # ── SLA / breach queries ───────────────────────────────────────────────────
-    if any(w in q for w in ["sla", "breach", "overdue", "late", "compliance",
-                             "deadline", "on time", "on-time"]):
+    # ── SLA subject ───────────────────────────────────────────────────────────
+    if about_sla:
         breached   = int(df["SLA Breached"].sum())
         breach_pct = breached / total * 100 if total else 0
         by_prio    = df.groupby("Priority").agg(
-            Total=("Request ID","count"), Breached=("SLA Breached","sum")
-        ).reindex(["Critical","High","Medium","Low"]).fillna(0)
-        by_type    = (df[df["SLA Breached"]]
-                      .groupby("Request Type").size()
-                      .sort_values(ascending=False).head(5))
+            Total=("Request ID", "count"), Breached=("SLA Breached", "sum")
+        ).reindex(["Critical", "High", "Medium", "Low"]).fillna(0)
+        by_type    = (df[df["SLA Breached"]].groupby("Request Type")
+                      .size().sort_values(ascending=False).head(5))
         lines = [
-            f"## SLA Performance Analysis",
+            "## SLA Performance Analysis",
             f"- **Overall breach rate:** {breach_pct:.1f}% ({breached} of {total} tickets)",
             f"- **On-time tickets:** {total - breached} ({(total-breached)/total*100:.0f}%)",
             "",
             "**By Priority:**",
         ]
-        for prio in ["Critical","High","Medium","Low"]:
+        for prio in ["Critical", "High", "Medium", "Low"]:
             if prio in by_prio.index:
-                t = int(by_prio.loc[prio,"Total"])
-                b = int(by_prio.loc[prio,"Breached"])
-                pct = b/t*100 if t else 0
+                t   = int(by_prio.loc[prio, "Total"])
+                b   = int(by_prio.loc[prio, "Breached"])
+                pct = b / t * 100 if t else 0
                 icon = "🔴" if pct > 40 else ("🟡" if pct > 20 else "🟢")
                 lines.append(f"  - {icon} **{prio}:** {b}/{t} breached ({pct:.0f}%)")
         if not by_type.empty:
@@ -1597,63 +1781,57 @@ def _rule_based_answer(question: str, df: pd.DataFrame) -> str:
                           "tickets and ensure engineers are not overloaded."]
         return "\n".join(lines)
 
-    # ── Unassigned / queue queries ─────────────────────────────────────────────
-    if any(w in q for w in ["unassigned", "queue", "no one", "nobody", "triage",
-                             "pending", "waiting", "assign"]):
+    # ── Unassigned / queue subject ────────────────────────────────────────────
+    if about_unassigned:
         unasgn = df[(df["State"] == "Pending for Review") & (df["Assigned To Clean"] == "")]
         crit   = int((unasgn["Priority"] == "Critical").sum())
         high   = int((unasgn["Priority"] == "High").sum())
         breach = int(unasgn["SLA Breached"].sum())
-        eng    = (df[df["Assigned To Clean"] != ""]
-                  .groupby("Assigned To Clean").size()
-                  .sort_values())
-        lines = [
-            f"## Unassigned Queue",
+        eng    = _eng_series().iloc[::-1]  # ascending for lightest first
+        lines  = [
+            "## Unassigned Queue",
             f"- **Total unassigned:** {len(unasgn)} tickets",
             f"- **Critical unassigned:** {crit} 🔴 — immediate action needed",
             f"- **High unassigned:** {high} 🟡",
             f"- **Already SLA breached:** {breach} ⏰",
         ]
         if not eng.empty:
-            lightest = eng.index[0]
+            lightest     = eng.index[0]
             lightest_cnt = int(eng.iloc[0])
-            lines += ["", f"**Triage recommendation:** Start by assigning the {crit} Critical "
-                          f"tickets. **{lightest}** has the lightest load ({lightest_cnt} tickets) "
-                          f"and should be first choice."]
+            lines += ["",
+                      f"**Triage recommendation:** Start by assigning the {crit} Critical "
+                      f"tickets. **{lightest}** has the lightest load ({lightest_cnt} tickets) "
+                      f"and should be first choice."]
         return "\n".join(lines)
 
-    # ── Assignment recommendation ──────────────────────────────────────────────
+    # ── Recommendation subject ────────────────────────────────────────────────
     if any(w in q for w in ["recommend", "suggest", "best person", "who should",
                              "ideal", "suitable", "right person"]):
-        eng = (df[df["Assigned To Clean"] != ""]
-               .groupby("Assigned To Clean").size()
-               .sort_values())
+        eng        = _eng_series().iloc[::-1]
         unasgn_cnt = int(((df["State"] == "Pending for Review") &
                           (df["Assigned To Clean"] == "")).sum())
         if eng.empty:
             return "No engineer data available for recommendations."
-        top3 = eng.head(3)
         lines = [
-            f"## Assignment Recommendations",
+            "## Assignment Recommendations",
             f"There are **{unasgn_cnt} unassigned tickets** pending triage.",
             "",
-            "**Best available engineers (by lightest load):**",
+            "**Best available engineers (lightest load):**",
         ]
-        for i, (name, cnt) in enumerate(top3.items(), 1):
+        for i, (name, cnt) in enumerate(eng.head(3).items(), 1):
             badge = "🟢 Optimal" if cnt <= 5 else "🟡 Moderate"
             lines.append(f"  {i}. **{name}** — {cnt} active tickets ({badge})")
         lines += ["", "Assign Critical/High SLA-breached tickets first to avoid further delays."]
         return "\n".join(lines)
 
-    # ── Critical / urgent queries ──────────────────────────────────────────────
-    if any(w in q for w in ["critical", "urgent", "high priority", "most important",
-                             "immediate", "emergency"]):
+    # ── Critical / urgent subject ─────────────────────────────────────────────
+    if about_critical:
         crit_df  = df[df["Priority"] == "Critical"]
         unasgn_c = int(((df["Priority"] == "Critical") &
                          (df["Assigned To Clean"] == "")).sum())
         breach_c = int(((df["Priority"] == "Critical") & df["SLA Breached"]).sum())
-        lines = [
-            f"## Critical Ticket Summary",
+        lines    = [
+            "## Critical Ticket Summary",
             f"- **Total Critical tickets:** {len(crit_df)}",
             f"- **Unassigned Critical:** {unasgn_c} 🔴",
             f"- **Critical & SLA breached:** {breach_c} ⏰",
@@ -1664,48 +1842,97 @@ def _rule_based_answer(question: str, df: pd.DataFrame) -> str:
                           "Assign immediately — SLA for Critical is **7 days**."]
         return "\n".join(lines)
 
-    # ── Request type queries ───────────────────────────────────────────────────
-    if any(w in q for w in ["type", "request type", "dast", "sast", "oss", "masa",
-                             "sign off", "design review", "false positive", "breakdown"]):
-        rt = df["Request Type"].replace("", "Unknown").value_counts()
+    # ── Request type subject ──────────────────────────────────────────────────
+    if about_reqtype:
+        rt        = df["Request Type"].replace("", "Unknown").value_counts()
         breach_rt = (df[df["SLA Breached"]].groupby("Request Type")
                      .size().sort_values(ascending=False))
-        lines = [f"## Request Type Breakdown", ""]
+        lines = ["## Request Type Breakdown", ""]
         for rtype, cnt in rt.head(8).items():
-            b = int(breach_rt.get(rtype, 0))
-            pct = b/cnt*100 if cnt else 0
+            b   = int(breach_rt.get(rtype, 0))
+            pct = b / cnt * 100 if cnt else 0
             icon = "🔴" if pct > 40 else ("🟡" if pct > 20 else "🟢")
             lines.append(f"  - {icon} **{rtype}:** {cnt} tickets, {b} breached ({pct:.0f}%)")
         worst = breach_rt.index[0] if not breach_rt.empty else "N/A"
         lines += ["", f"**Worst SLA compliance:** {worst}"]
         return "\n".join(lines)
 
-    # ── Group / team queries ───────────────────────────────────────────────────
-    if any(w in q for w in ["group", "team", "csappsec", "itssdlc", "cssdlc",
-                             "which team", "which group"]):
-        grp = df["Primary Group"].value_counts()
-        lines = [f"## Group Distribution", ""]
+    # ── Group subject ─────────────────────────────────────────────────────────
+    if about_group:
+        grp   = df["Primary Group"].value_counts()
+        lines = ["## Group Distribution", ""]
         for g, cnt in grp.items():
-            b = int(df[df["Primary Group"] == g]["SLA Breached"].sum())
-            pct = b/cnt*100 if cnt else 0
+            b   = int(df[df["Primary Group"] == g]["SLA Breached"].sum())
+            pct = b / cnt * 100 if cnt else 0
             lines.append(f"  - **{g}:** {cnt} tickets, {b} breached ({pct:.0f}%)")
         return "\n".join(lines)
 
-    # ── Default: general overview ──────────────────────────────────────────────
-    breached   = int(df["SLA Breached"].sum())
-    breach_pct = breached / total * 100 if total else 0
-    unassigned = int((df["Assigned To Clean"] == "").sum())
-    closed     = int((df["State"] == "Closed").sum())
-    pending    = int((df["State"] == "Pending for Review").sum())
-    eng_count  = df[df["Assigned To Clean"] != ""]["Assigned To Clean"].nunique()
+    # ── Summary / overview / status ───────────────────────────────────────────
+    if is_summary or any(w in q for w in ["overview", "summary", "status",
+                                           "dashboard", "report"]):
+        breached   = int(df["SLA Breached"].sum())
+        breach_pct = breached / total * 100 if total else 0
+        unassigned = int((df["Assigned To Clean"] == "").sum())
+        closed     = int((df["State"] == "Closed").sum())
+        pending    = int((df["State"] == "Pending for Review").sum())
+        eng_count  = df[df["Assigned To Clean"] != ""]["Assigned To Clean"].nunique()
+        return (
+            f"## AppSec Dashboard Overview\n\n"
+            f"- **Total tickets:** {total:,}\n"
+            f"- **Pending for Review:** {pending} | **Closed:** {closed}\n"
+            f"- **Unassigned:** {unassigned} | **Active Engineers:** {eng_count}\n"
+            f"- **SLA Breach Rate:** {breach_pct:.1f}% ({breached} tickets)"
+        )
+
+    # ── Catch-all: try to extract the best match, or ask for clarification ────
+    # Try to surface the most relevant stat based on any keyword present
+    keywords_found = []
+    if any(w in q for w in ["ticket", "request", "issue"]): keywords_found.append("tickets")
+    if any(w in q for w in ["assign", "owner", "responsible"]): keywords_found.append("assignments")
+    if any(w in q for w in ["state", "status", "open", "closed", "progress"]): keywords_found.append("states")
+    if any(w in q for w in ["priority", "high", "medium", "low"]): keywords_found.append("priorities")
+    if any(w in q for w in ["application", "app", "portfolio"]): keywords_found.append("applications")
+
+    if "state" in keywords_found or "states" in " ".join(keywords_found):
+        state_counts = df["State"].value_counts()
+        lines = ["## Ticket States", ""]
+        for state, cnt in state_counts.items():
+            lines.append(f"  - **{state}:** {cnt} tickets")
+        return "\n".join(lines)
+
+    if "priorities" in keywords_found or "priority" in q:
+        prio_counts = df["Priority"].value_counts()
+        lines = ["## Priority Breakdown", ""]
+        for prio, cnt in prio_counts.items():
+            b   = int(((df["Priority"] == prio) & df["SLA Breached"]).sum())
+            pct = b / cnt * 100 if cnt else 0
+            icon = "🔴" if pct > 40 else ("🟡" if pct > 20 else "🟢")
+            lines.append(f"  - {icon} **{prio}:** {cnt} tickets ({b} breached, {pct:.0f}%)")
+        return "\n".join(lines)
+
+    if "application" in q or "app " in q or "portfolio" in q:
+        top_apps = df["Application Name"].value_counts().head(10)
+        lines = ["## Top 10 Applications by Ticket Volume", ""]
+        for app, cnt in top_apps.items():
+            lines.append(f"  - **{app}:** {cnt} tickets")
+        return "\n".join(lines)
+
+    # Nothing matched — give a helpful prompt
+    breached  = int(df["SLA Breached"].sum())
+    unassigned= int((df["Assigned To Clean"] == "").sum())
+    eng_count = df[df["Assigned To Clean"] != ""]["Assigned To Clean"].nunique()
     return (
-        f"## AppSec Dashboard Overview\n\n"
-        f"- **Total tickets:** {total:,}\n"
-        f"- **Pending for Review:** {pending} | **Closed:** {closed}\n"
-        f"- **Unassigned:** {unassigned} | **Active Engineers:** {eng_count}\n"
-        f"- **SLA Breach Rate:** {breach_pct:.1f}% ({breached} tickets)\n\n"
-        f"You can ask me about: **workload**, **SLA breaches**, **unassigned tickets**, "
-        f"**assignment recommendations**, **critical tickets**, **request types**, or **group distribution**."
+        f"I'm not sure what you're looking for. Here's a quick snapshot:\n\n"
+        f"- **{total:,} total tickets** | **{unassigned} unassigned** | "
+        f"**{breached} SLA breached** | **{eng_count} engineers**\n\n"
+        f"Try asking:\n"
+        f"- *How many engineers are there?*\n"
+        f"- *Give me the engineer list*\n"
+        f"- *What is the SLA breach rate?*\n"
+        f"- *How many unassigned tickets?*\n"
+        f"- *Which engineer is most overloaded?*\n"
+        f"- *Show me the request type breakdown*\n"
+        f"- *Give me a dashboard overview*"
     )
 
 
