@@ -174,6 +174,32 @@ button[data-testid="baseButton-headerNoPadding"] {{ display: none !important; }}
     border-color: rgba(0,212,255,0.15) !important;
 }}
 
+/* ── Separator item (6th label = AI AGENTS header) ── */
+[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(6) {{
+    pointer-events: none !important;
+    cursor: default !important;
+    color: #b44fff !important;
+    font-size: 0.6rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.2em !important;
+    text-transform: uppercase !important;
+    border: none !important;
+    background: transparent !important;
+    padding: 12px 6px 4px !important;
+    margin-top: 4px !important;
+    border-top: 1px solid rgba(180,79,255,0.3) !important;
+    border-radius: 0 !important;
+}}
+[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(6):hover {{
+    background: transparent !important;
+    border-color: rgba(180,79,255,0.3) !important;
+}}
+/* Hide radio circle on separator */
+[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(6) > div:first-child,
+[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(6) input {{
+    display: none !important;
+}}
+
 /* ── Typography ── */
 h1 {{
     font-family: 'Orbitron', monospace !important;
@@ -2707,59 +2733,45 @@ def render_sidebar():
         </div>
         """, unsafe_allow_html=True)
 
-        # ── Operations section ─────────────────────────────────────────────────
+        # ── Unified navigation radio ────────────────────────────────────────────
+        # Single radio = guaranteed mutual exclusion. Item 6 ("◈ AI AGENTS")
+        # is a CSS-styled separator: pointer-events:none, no radio circle.
         st.markdown(
             '<div style="font-size:0.58rem;letter-spacing:0.2em;text-transform:uppercase;'
             'color:#4a5568;padding:0 6px;margin-bottom:3px;font-weight:700">Operations</div>',
             unsafe_allow_html=True)
 
-        # Initialise: pre-select Overview on very first load
-        if "_nav_grp" not in st.session_state:
-            st.session_state["_nav_grp"] = "ops"
-            st.session_state["nav"] = "Overview"
-
-        def _ops_changed():
-            st.session_state["_nav_grp"] = "ops"
-            # Deselect agent radio
-            if "_nav_agent" in st.session_state:
-                del st.session_state["_nav_agent"]
-
-        def _agent_changed():
-            st.session_state["_nav_grp"] = "agent"
-            # Deselect ops radio
-            if "nav" in st.session_state:
-                del st.session_state["nav"]
-
-        ops_page = st.radio("Navigation", [
+        _SEP = "◈  AI AGENTS"
+        _ALL_PAGES = [
             "Overview",
             "Workload Distribution",
             "Unassigned Queue",
             "Ticket Tracker",
             "SLA & Analytics",
-        ], label_visibility="collapsed", key="nav", index=None, on_change=_ops_changed)
-
-        # ── AI Agents section ───────────────────────────────────────────────────
-        st.markdown(
-            '<div style="margin:12px 0 3px;border-top:1px solid rgba(180,79,255,0.3);'
-            'padding-top:10px;font-size:0.58rem;letter-spacing:0.2em;'
-            'text-transform:uppercase;color:#b44fff;padding-left:6px;font-weight:700">'
-            'AI Agents</div>',
-            unsafe_allow_html=True)
-
-        agent_page = st.radio("Agent Navigation", [
+            _SEP,               # ← separator / section header (CSS makes it non-clickable)
             "AI Copilot",
             "Weekly Briefing",
             "ServiceNow Sync",
-        ], label_visibility="collapsed", key="_nav_agent",
-            index=None, on_change=_agent_changed)
+        ]
 
-        # Active page: whichever group was last clicked wins
-        if st.session_state.get("_nav_grp") == "agent" and agent_page is not None:
-            page = agent_page
-        elif ops_page is not None:
-            page = ops_page
+        # Pre-select Overview on first load
+        if "nav_unified" not in st.session_state:
+            st.session_state["nav_unified"] = "Overview"
+
+        selected = st.radio(
+            "Navigation", _ALL_PAGES,
+            label_visibility="collapsed",
+            key="nav_unified",
+        )
+
+        # Guard: if separator was somehow selected (CSS failed), restore last page
+        if selected == _SEP:
+            page = st.session_state.get("_nav_prev", "Overview")
+            st.session_state["nav_unified"] = page
+            st.rerun()
         else:
-            page = "Overview"  # safe fallback
+            page = selected
+            st.session_state["_nav_prev"] = page
 
         st.markdown('<div style="margin:16px 0;border-top:1px solid rgba(0,212,255,0.08)"></div>',
                     unsafe_allow_html=True)
