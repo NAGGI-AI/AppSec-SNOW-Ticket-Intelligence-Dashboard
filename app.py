@@ -223,6 +223,71 @@ h3, h4 {{
 }}
 p, li, label {{ color: var(--text) !important; }}
 
+/* ── Markdown content (briefing, copilot responses) — force visible light text ── */
+[data-testid="stMarkdown"] p,
+[data-testid="stMarkdown"] li,
+[data-testid="stMarkdown"] span {{
+    color: #dce8ff !important;
+    font-size: 0.93rem !important;
+    line-height: 1.75 !important;
+}}
+[data-testid="stMarkdown"] strong {{
+    color: #ffffff !important;
+    font-weight: 600 !important;
+}}
+[data-testid="stMarkdown"] h1,
+[data-testid="stMarkdown"] h2 {{
+    color: #00d4ff !important;
+    font-family: 'Orbitron', monospace !important;
+    letter-spacing: 0.04em !important;
+    margin-top: 1.4rem !important;
+    margin-bottom: 0.4rem !important;
+    border-bottom: 1px solid rgba(0,212,255,0.15) !important;
+    padding-bottom: 6px !important;
+}}
+[data-testid="stMarkdown"] h3,
+[data-testid="stMarkdown"] h4 {{
+    color: #a3c4f3 !important;
+    margin-top: 1rem !important;
+}}
+/* Briefing markdown tables */
+[data-testid="stMarkdown"] table {{
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin: 12px 0 !important;
+}}
+[data-testid="stMarkdown"] table th {{
+    color: #00d4ff !important;
+    background: rgba(0,212,255,0.07) !important;
+    border: 1px solid rgba(0,212,255,0.2) !important;
+    padding: 8px 14px !important;
+    font-size: 0.82rem !important;
+    letter-spacing: 0.05em !important;
+    text-transform: uppercase !important;
+}}
+[data-testid="stMarkdown"] table td {{
+    color: #dce8ff !important;
+    border: 1px solid rgba(255,255,255,0.07) !important;
+    padding: 7px 14px !important;
+    font-size: 0.88rem !important;
+}}
+[data-testid="stMarkdown"] table tr:nth-child(even) td {{
+    background: rgba(255,255,255,0.02) !important;
+}}
+/* Bullet list markers */
+[data-testid="stMarkdown"] ul li::marker {{
+    color: #00d4ff !important;
+}}
+[data-testid="stMarkdown"] ol li::marker {{
+    color: #b44fff !important;
+    font-weight: 700 !important;
+}}
+/* Horizontal rules in briefing */
+[data-testid="stMarkdown"] hr {{
+    border-color: rgba(0,212,255,0.15) !important;
+    margin: 16px 0 !important;
+}}
+
 /* ── KPI Cards ── */
 .kpi-row {{ display: flex; gap: 14px; margin-bottom: 14px; }}
 .kpi-card {{
@@ -1544,36 +1609,65 @@ def _rule_based_answer(question: str, df: pd.DataFrame) -> str:
 
     # ── Step 2: detect intent ─────────────────────────────────────────────────
     is_count   = (q.startswith("how many") or q.startswith("how much")
-                  or "count" in q or "total number" in q or "number of" in q)
+                  or any(p in q for p in ["count", "total number", "number of",
+                                          "how much", "total count", "total tickets",
+                                          "how much ticket", "total no"]))
     is_list    = (any(q.startswith(p) for p in ["list", "show", "give", "display",
-                                                  "get ", "fetch", "print", "tell me"])
-                  or any(p in q for p in ["all ", "complete ", "full ", "entire "]))
-    is_who     = q.startswith("who") or " who " in q
-    is_which   = q.startswith("which")
+                                                  "get ", "fetch", "print", "tell me",
+                                                  "explain", "describe", "what are all",
+                                                  "show me", "give me"])
+                  or any(p in q for p in ["all ", "complete ", "full ", "entire ",
+                                          "all the", "tell me about", "details of",
+                                          "detail about", "information about",
+                                          "info about", "details about"]))
+    is_who     = (q.startswith("who") or " who " in q
+                  or any(p in q for p in ["which person", "which engineer",
+                                          "which one", "who is", "who has",
+                                          "who having", "who have"]))
+    is_which   = q.startswith("which") or "which one" in q
     is_what    = any(q.startswith(p) for p in ["what is", "what are", "what's",
-                                                 "what was", "whats"])
+                                                 "what was", "whats", "what about"])
+    is_top     = any(p in q for p in ["top ", "highest", "maximum", "most",
+                                       "worst", "best", "lowest", "minimum", "least"])
     is_summary = any(p in q for p in ["summary", "overview", "status", "report",
-                                       "brief", "dashboard", "situation"])
+                                       "brief", "dashboard", "situation", "snapshot",
+                                       "health", "at a glance", "quick view"])
 
     # ── Step 3: detect subject ────────────────────────────────────────────────
     about_engineer  = any(w in q for w in ["engineer", "team member", "assignee",
-                                            "person", "people", "staff", "member"])
-    about_ticket    = any(w in q for w in ["ticket", "request", "issue", "case", "item"])
+                                            "person", "people", "staff", "member",
+                                            "resource", "analyst", "employee",
+                                            "who is assigned", "assigned to"])
+    about_ticket    = any(w in q for w in ["ticket", "request", "issue", "case",
+                                            "item", "task", "incident"])
     about_sla       = any(w in q for w in ["sla", "breach", "overdue", "deadline",
-                                            "late", "compliance", "on time", "on-time"])
+                                            "late", "compliance", "on time", "on-time",
+                                            "slipping", "missed", "target", "due"])
     about_unassigned= any(w in q for w in ["unassigned", "queue", "nobody", "no one",
-                                            "triage", "waiting", "not assigned"])
+                                            "triage", "waiting", "not assigned",
+                                            "open ticket", "pending ticket",
+                                            "needs assignment", "no assignee"])
     about_group     = any(w in q for w in ["group", "department", "csappsec",
-                                            "itssdlc", "cssdlc"])
+                                            "itssdlc", "cssdlc", "team distribution",
+                                            "which team", "team wise"])
     about_critical  = any(w in q for w in ["critical", "urgent", "high priority",
-                                            "immediate", "emergency"])
+                                            "immediate", "emergency", "severe",
+                                            "blocker", "p1", "p0"])
     about_reqtype   = any(w in q for w in ["type", "request type", "dast", "sast",
                                             "oss", "masa", "sign off", "design review",
-                                            "false positive", "breakdown"])
+                                            "false positive", "breakdown", "category",
+                                            "kind of", "kind of request",
+                                            "assessment type", "security review"])
     about_workload  = any(w in q for w in ["workload", "load", "busy", "overload",
                                             "overloaded", "lightest", "heaviest",
-                                            "redistribute", "rebalance",
-                                            "most ticket", "fewest ticket", "most load"])
+                                            "redistribute", "rebalance", "capacity",
+                                            "most ticket", "fewest ticket", "most load",
+                                            "more number", "more ticket", "having more",
+                                            "maximum ticket", "minimum ticket"])
+    about_closed    = any(w in q for w in ["closed", "resolved", "completed",
+                                            "done", "finished", "close"])
+    about_open      = any(w in q for w in ["open", "active", "in progress",
+                                            "pending", "ongoing", "running"])
 
     # ── Helpers ───────────────────────────────────────────────────────────────
     def _eng_series():
@@ -1915,23 +2009,46 @@ def _rule_based_answer(question: str, df: pd.DataFrame) -> str:
             f"- **SLA Breach Rate:** {breach_pct:.1f}% ({breached} tickets)"
         )
 
-    # ── Catch-all: try to extract the best match, or ask for clarification ────
-    # Try to surface the most relevant stat based on any keyword present
-    keywords_found = []
-    if any(w in q for w in ["ticket", "request", "issue"]): keywords_found.append("tickets")
-    if any(w in q for w in ["assign", "owner", "responsible"]): keywords_found.append("assignments")
-    if any(w in q for w in ["state", "status", "open", "closed", "progress"]): keywords_found.append("states")
-    if any(w in q for w in ["priority", "high", "medium", "low"]): keywords_found.append("priorities")
-    if any(w in q for w in ["application", "app", "portfolio"]): keywords_found.append("applications")
-
-    if "state" in keywords_found or "states" in " ".join(keywords_found):
-        state_counts = df["State"].value_counts()
-        lines = ["## Ticket States", ""]
-        for state, cnt in state_counts.items():
-            lines.append(f"  - **{state}:** {cnt} tickets")
+    # ── Closed / resolved tickets ─────────────────────────────────────────────
+    if about_closed:
+        closed_df = df[df["State"] == "Closed"]
+        avg_days  = closed_df["Days Open"].mean() if len(closed_df) else 0
+        eng_closed = (closed_df[closed_df["Assigned To Clean"] != ""]
+                      .groupby("Assigned To Clean").size()
+                      .sort_values(ascending=False).head(5))
+        lines = [
+            "## Closed / Resolved Tickets",
+            f"- **Total closed:** **{len(closed_df):,}** ({len(closed_df)/total*100:.0f}% of all tickets)",
+            f"- **Average resolution time:** {avg_days:.1f} days",
+            "",
+            "**Top 5 engineers by closed ticket count:**",
+        ]
+        for n, c in eng_closed.items():
+            lines.append(f"  - **{n}:** {c} closed tickets")
         return "\n".join(lines)
 
-    if "priorities" in keywords_found or "priority" in q:
+    # ── Open / active / in-progress tickets ──────────────────────────────────
+    if about_open:
+        state_map = {
+            "Pending for Review": int((df["State"] == "Pending for Review").sum()),
+            "In Progress":        int((df["State"] == "In Progress").sum()),
+            "Sent for Clarification": int((df["State"] == "Sent for Clarification").sum()),
+        }
+        total_open = sum(state_map.values())
+        lines = [
+            "## Active / Open Tickets",
+            f"- **Total active tickets:** **{total_open}**",
+        ]
+        for state, cnt in state_map.items():
+            lines.append(f"  - **{state}:** {cnt}")
+        breached_open = int(df[df["State"] != "Closed"]["SLA Breached"].sum())
+        lines += ["", f"- **SLA breached among active:** {breached_open} ⏰"]
+        return "\n".join(lines)
+
+    # ── Priority breakdown ────────────────────────────────────────────────────
+    if any(w in q for w in ["priority", "high", "medium", "low", "severity",
+                              "p1", "p2", "p3", "p4", "priority wise",
+                              "priority breakdown", "by priority"]):
         prio_counts = df["Priority"].value_counts()
         lines = ["## Priority Breakdown", ""]
         for prio, cnt in prio_counts.items():
@@ -1941,28 +2058,60 @@ def _rule_based_answer(question: str, df: pd.DataFrame) -> str:
             lines.append(f"  - {icon} **{prio}:** {cnt} tickets ({b} breached, {pct:.0f}%)")
         return "\n".join(lines)
 
-    if "application" in q or "app " in q or "portfolio" in q:
-        top_apps = df["Application Name"].value_counts().head(10)
-        lines = ["## Top 10 Applications by Ticket Volume", ""]
-        for app, cnt in top_apps.items():
-            lines.append(f"  - **{app}:** {cnt} tickets")
+    # ── Ticket state distribution ─────────────────────────────────────────────
+    if any(w in q for w in ["state", "states", "status wise", "distribution",
+                              "state wise", "what are the states"]):
+        state_counts = df["State"].value_counts()
+        lines = ["## Ticket State Distribution", ""]
+        for state, cnt in state_counts.items():
+            pct = cnt / total * 100 if total else 0
+            lines.append(f"  - **{state}:** {cnt} ({pct:.0f}%)")
         return "\n".join(lines)
 
-    # Nothing matched — give a helpful prompt
+    # ── Application / portfolio queries ──────────────────────────────────────
+    if any(w in q for w in ["application", "app ", "app name", "portfolio",
+                              "which app", "which application", "top app"]):
+        top_apps = df["Application Name"].value_counts().head(10)
+        breach_by_app = (df[df["SLA Breached"]].groupby("Application Name")
+                         .size().sort_values(ascending=False))
+        lines = ["## Top 10 Applications by Ticket Volume", ""]
+        for app, cnt in top_apps.items():
+            b   = int(breach_by_app.get(app, 0))
+            pct = b / cnt * 100 if cnt else 0
+            icon = "🔴" if pct > 40 else ("🟡" if pct > 20 else "🟢")
+            lines.append(f"  - {icon} **{app}:** {cnt} tickets ({b} breached)")
+        return "\n".join(lines)
+
+    # ── Top-N queries (top 5 engineers, top requests, etc.) ──────────────────
+    if is_top and about_ticket:
+        eng = _eng_series()
+        lines = ["## Top Engineers by Ticket Volume", ""]
+        for i, (n, c) in enumerate(eng.head(10).items(), 1):
+            badge = "🔴 Overloaded" if c > 10 else ("🟡 Moderate" if c > 5 else "🟢 Optimal")
+            lines.append(f"  {i}. **{n}** — {c} tickets · {badge}")
+        return "\n".join(lines)
+
+    # ── Nothing matched — clarification prompt with live numbers ─────────────
     breached  = int(df["SLA Breached"].sum())
     unassigned= int((df["Assigned To Clean"] == "").sum())
     eng_count = df[df["Assigned To Clean"] != ""]["Assigned To Clean"].nunique()
+    closed    = int((df["State"] == "Closed").sum())
     return (
-        f"I'm not sure what you're looking for. Here's a quick snapshot:\n\n"
-        f"- **{total:,} total tickets** | **{unassigned} unassigned** | "
-        f"**{breached} SLA breached** | **{eng_count} engineers**\n\n"
-        f"Try asking:\n"
-        f"- *How many engineers are there?*\n"
-        f"- *Give me the engineer list*\n"
-        f"- *What is the SLA breach rate?*\n"
-        f"- *How many unassigned tickets?*\n"
-        f"- *Which engineer is most overloaded?*\n"
-        f"- *Show me the request type breakdown*\n"
+        f"## Quick Dashboard Snapshot\n\n"
+        f"| Metric | Value |\n"
+        f"|--------|-------|\n"
+        f"| Total Tickets | **{total:,}** |\n"
+        f"| Closed | **{closed:,}** ({closed/total*100:.0f}%) |\n"
+        f"| Unassigned | **{unassigned}** |\n"
+        f"| SLA Breached | **{breached}** ({breached/total*100:.1f}%) |\n"
+        f"| Active Engineers | **{eng_count}** |\n\n"
+        f"**You can ask me:**\n"
+        f"- *How many engineers are there?* / *Give me the engineer list*\n"
+        f"- *What is the SLA breach rate?* / *Which priority has worst SLA?*\n"
+        f"- *How many unassigned tickets?* / *Show unassigned queue*\n"
+        f"- *Who is most overloaded?* / *Who has the lightest workload?*\n"
+        f"- *Show request type breakdown* / *Which type has worst compliance?*\n"
+        f"- *How many closed tickets?* / *How many open tickets?*\n"
         f"- *Give me a dashboard overview*"
     )
 
