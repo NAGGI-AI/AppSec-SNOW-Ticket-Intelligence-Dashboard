@@ -150,6 +150,11 @@ header[data-testid="stHeader"],
 [data-testid="stSidebar"] > div {{ padding-top: 0 !important; }}
 [data-testid="stSidebar"] * {{ color: var(--text) !important; }}
 
+/* ── Hide sidebar collapse/expand arrows ── */
+[data-testid="collapsedControl"] {{ display: none !important; }}
+button[data-testid="baseButton-headerNoPadding"] {{ display: none !important; }}
+[data-testid="stSidebarCollapseButton"] {{ display: none !important; }}
+
 /* Nav radio */
 [data-testid="stSidebar"] .stRadio > div {{ gap: 2px !important; }}
 [data-testid="stSidebar"] .stRadio label {{
@@ -2708,12 +2713,22 @@ def render_sidebar():
             'color:#4a5568;padding:0 6px;margin-bottom:3px;font-weight:700">Operations</div>',
             unsafe_allow_html=True)
 
-        # Reset agent radio when ops was last clicked
-        if st.session_state.get("_nav_grp") == "ops" and "_nav_agent" in st.session_state:
-            del st.session_state["_nav_agent"]
+        # Initialise: pre-select Overview on very first load
+        if "_nav_grp" not in st.session_state:
+            st.session_state["_nav_grp"] = "ops"
+            st.session_state["nav"] = "Overview"
 
         def _ops_changed():
             st.session_state["_nav_grp"] = "ops"
+            # Deselect agent radio
+            if "_nav_agent" in st.session_state:
+                del st.session_state["_nav_agent"]
+
+        def _agent_changed():
+            st.session_state["_nav_grp"] = "agent"
+            # Deselect ops radio
+            if "nav" in st.session_state:
+                del st.session_state["nav"]
 
         ops_page = st.radio("Navigation", [
             "Overview",
@@ -2721,7 +2736,7 @@ def render_sidebar():
             "Unassigned Queue",
             "Ticket Tracker",
             "SLA & Analytics",
-        ], label_visibility="collapsed", key="nav", on_change=_ops_changed)
+        ], label_visibility="collapsed", key="nav", index=None, on_change=_ops_changed)
 
         # ── AI Agents section ───────────────────────────────────────────────────
         st.markdown(
@@ -2731,9 +2746,6 @@ def render_sidebar():
             'AI Agents</div>',
             unsafe_allow_html=True)
 
-        def _agent_changed():
-            st.session_state["_nav_grp"] = "agent"
-
         agent_page = st.radio("Agent Navigation", [
             "AI Copilot",
             "Weekly Briefing",
@@ -2741,9 +2753,13 @@ def render_sidebar():
         ], label_visibility="collapsed", key="_nav_agent",
             index=None, on_change=_agent_changed)
 
-        # Active page: agent takes over when explicitly selected
-        page = agent_page if (st.session_state.get("_nav_grp") == "agent"
-                              and agent_page is not None) else ops_page
+        # Active page: whichever group was last clicked wins
+        if st.session_state.get("_nav_grp") == "agent" and agent_page is not None:
+            page = agent_page
+        elif ops_page is not None:
+            page = ops_page
+        else:
+            page = "Overview"  # safe fallback
 
         st.markdown('<div style="margin:16px 0;border-top:1px solid rgba(0,212,255,0.08)"></div>',
                     unsafe_allow_html=True)
