@@ -80,34 +80,34 @@ BCM_PRIORITY_MAP    = {"critical": 4, "high": 3, "medium": 2, "low": 1, "": 1}
 APPSEC_PRIORITY_MAP = {"critical": 4, "high": 3, "medium": 2, "low": 1,
                        "tier 1": 4, "tier 2": 3, "tier 3": 2, "tier 4": 1, "": 1}
 
-STATE_COLORS    = {"Pending for Review": "#ffa64d", "Sent for Clarification": "#00d4ff", "Rejected": "#ff4b6e", "Closed": "#00ff88"}
-PRIORITY_COLORS = {"Critical": "#ff4b6e", "High": "#ffa64d", "Medium": "#00d4ff", "Low": "#00ff88"}
+STATE_COLORS    = {"Pending for Review": "#ffa64d", "Sent for Clarification": "#c084fc", "Rejected": "#ff4b6e", "Closed": "#4ade80"}
+PRIORITY_COLORS = {"Critical": "#ff4b6e", "High": "#ffa64d", "Medium": "#c084fc", "Low": "#4ade80"}
 
-NEON_GREEN  = "#00ff88"
-NEON_BLUE   = "#00d4ff"
-NEON_PURPLE = "#b44fff"
+NEON_GREEN  = "#4ade80"
+NEON_BLUE   = "#c084fc"   # violet-purple (primary accent)
+NEON_PURPLE = "#b44fff"   # bright purple
 NEON_ORANGE = "#ffa64d"
 NEON_RED    = "#ff4b6e"
-NEON_PINK   = "#ff6eb4"
-BG_DARK     = "#070914"
-BG_CARD     = "#0d1526"
-BORDER_DIM  = "rgba(0,212,255,0.12)"
+NEON_PINK   = "#e879f9"   # magenta-purple
+BG_DARK     = "#0a0619"   # deep purple-black
+BG_CARD     = "#130828"   # dark purple card
+BORDER_DIM  = "rgba(192,132,252,0.15)"
 
-CHART_COLORS = [NEON_BLUE, NEON_GREEN, NEON_PURPLE, NEON_ORANGE, NEON_RED,
-                NEON_PINK, "#ffe066", "#66ffee", "#d966ff", "#ff9966"]
+CHART_COLORS = [NEON_PURPLE, "#c084fc", NEON_PINK, NEON_GREEN, NEON_ORANGE,
+                NEON_RED, "#ddd6fe", "#7c3aed", "#c4b5fd", "#f0abfc"]
 
 PLOTLY_BASE = dict(
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(family="Inter, sans-serif", color="#8892b0", size=12),
-    title_font=dict(family="Orbitron, monospace", color="#cdd6f4", size=13),
-    legend=dict(bgcolor="rgba(7,9,20,0.85)", bordercolor=BORDER_DIM, borderwidth=1,
-                font=dict(color="#cdd6f4", size=11)),
+    font=dict(family="Inter, sans-serif", color="#c4b5fd", size=12),
+    title_font=dict(family="Orbitron, monospace", color="#f0e6ff", size=13),
+    legend=dict(bgcolor="rgba(10,6,25,0.9)", bordercolor="rgba(192,132,252,0.2)", borderwidth=1,
+                font=dict(color="#e9d5ff", size=11)),
     margin=dict(l=40, r=24, t=52, b=36),
-    xaxis=dict(gridcolor="rgba(255,255,255,0.04)", zerolinecolor="rgba(255,255,255,0.04)",
-               tickfont=dict(color="#8892b0")),
-    yaxis=dict(gridcolor="rgba(255,255,255,0.04)", zerolinecolor="rgba(255,255,255,0.04)",
-               tickfont=dict(color="#8892b0")),
+    xaxis=dict(gridcolor="rgba(255,255,255,0.05)", zerolinecolor="rgba(255,255,255,0.05)",
+               tickfont=dict(color="#c4b5fd")),
+    yaxis=dict(gridcolor="rgba(255,255,255,0.05)", zerolinecolor="rgba(255,255,255,0.05)",
+               tickfont=dict(color="#c4b5fd")),
 )
 
 # ─── CSS ──────────────────────────────────────────────────────────────────────
@@ -144,8 +144,8 @@ header[data-testid="stHeader"],
 
 /* ── Sidebar ── */
 [data-testid="stSidebar"] {{
-    background: linear-gradient(180deg, #04060f 0%, #07091a 60%, #0a0e1a 100%) !important;
-    border-right: 1px solid rgba(0,212,255,0.1) !important;
+    background: linear-gradient(180deg, #060215 0%, #0a0619 60%, #0d0822 100%) !important;
+    border-right: 1px solid rgba(192,132,252,0.12) !important;
 }}
 [data-testid="stSidebar"] > div {{ padding-top: 0 !important; }}
 [data-testid="stSidebar"] * {{ color: var(--text) !important; }}
@@ -170,12 +170,12 @@ button[data-testid="baseButton-headerNoPadding"] {{ display: none !important; }}
 }}
 [data-testid="stSidebar"] .stRadio label:hover {{
     color: var(--blue) !important;
-    background: rgba(0,212,255,0.07) !important;
-    border-color: rgba(0,212,255,0.15) !important;
+    background: rgba(192,132,252,0.07) !important;
+    border-color: rgba(192,132,252,0.15) !important;
 }}
 
 /* ── Separator item (6th label = AI AGENTS header) ── */
-[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(6) {{
+[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(5) {{
     pointer-events: none !important;
     cursor: default !important;
     color: #b44fff !important;
@@ -190,13 +190,13 @@ button[data-testid="baseButton-headerNoPadding"] {{ display: none !important; }}
     border-top: 1px solid rgba(180,79,255,0.3) !important;
     border-radius: 0 !important;
 }}
-[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(6):hover {{
+[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(5):hover {{
     background: transparent !important;
     border-color: rgba(180,79,255,0.3) !important;
 }}
 /* Hide radio circle on separator */
-[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(6) > div:first-child,
-[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(6) input {{
+[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(5) > div:first-child,
+[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(5) input {{
     display: none !important;
 }}
 
@@ -242,7 +242,7 @@ p, li, label {{ color: var(--text) !important; }}
     letter-spacing: 0.04em !important;
     margin-top: 1.4rem !important;
     margin-bottom: 0.4rem !important;
-    border-bottom: 1px solid rgba(0,212,255,0.15) !important;
+    border-bottom: 1px solid rgba(192,132,252,0.15) !important;
     padding-bottom: 6px !important;
 }}
 [data-testid="stMarkdown"] h3,
@@ -258,8 +258,8 @@ p, li, label {{ color: var(--text) !important; }}
 }}
 [data-testid="stMarkdown"] table th {{
     color: #00d4ff !important;
-    background: rgba(0,212,255,0.07) !important;
-    border: 1px solid rgba(0,212,255,0.2) !important;
+    background: rgba(192,132,252,0.07) !important;
+    border: 1px solid rgba(192,132,252,0.2) !important;
     padding: 8px 14px !important;
     font-size: 0.82rem !important;
     letter-spacing: 0.05em !important;
@@ -284,7 +284,7 @@ p, li, label {{ color: var(--text) !important; }}
 }}
 /* Horizontal rules in briefing */
 [data-testid="stMarkdown"] hr {{
-    border-color: rgba(0,212,255,0.15) !important;
+    border-color: rgba(192,132,252,0.15) !important;
     margin: 16px 0 !important;
 }}
 
@@ -306,11 +306,11 @@ p, li, label {{ color: var(--text) !important; }}
     position: absolute;
     inset: 0;
     border-radius: 14px;
-    background: radial-gradient(ellipse at top left, var(--accent-color, rgba(0,212,255,0.06)) 0%, transparent 70%);
+    background: radial-gradient(ellipse at top left, var(--accent-color, rgba(192,132,252,0.06)) 0%, transparent 70%);
     pointer-events: none;
 }}
 .kpi-card:hover {{
-    border-color: var(--accent-color, rgba(0,212,255,0.3));
+    border-color: var(--accent-color, rgba(192,132,252,0.3));
     transform: translateY(-3px);
     box-shadow: 0 12px 40px rgba(0,0,0,0.4);
 }}
@@ -374,8 +374,8 @@ p, li, label {{ color: var(--text) !important; }}
 
 /* ── Page banner ── */
 .page-header {{
-    background: linear-gradient(135deg, rgba(0,212,255,0.06) 0%, rgba(180,79,255,0.04) 100%);
-    border: 1px solid rgba(0,212,255,0.12);
+    background: linear-gradient(135deg, rgba(192,132,252,0.06) 0%, rgba(180,79,255,0.04) 100%);
+    border: 1px solid rgba(192,132,252,0.12);
     border-left: 3px solid {NEON_BLUE};
     border-radius: 0 12px 12px 0;
     padding: 14px 20px;
@@ -407,13 +407,13 @@ p, li, label {{ color: var(--text) !important; }}
 }}
 .pill-open     {{ background: rgba(255,75,110,0.15); color: {NEON_RED};    border: 1px solid rgba(255,75,110,0.35); }}
 .pill-assigned {{ background: rgba(255,166,77,0.15); color: {NEON_ORANGE}; border: 1px solid rgba(255,166,77,0.35); }}
-.pill-progress {{ background: rgba(0,212,255,0.15);  color: {NEON_BLUE};   border: 1px solid rgba(0,212,255,0.35); }}
+.pill-progress {{ background: rgba(192,132,252,0.15);  color: {NEON_BLUE};   border: 1px solid rgba(192,132,252,0.35); }}
 .pill-closed   {{ background: rgba(0,255,136,0.15);  color: {NEON_GREEN};  border: 1px solid rgba(0,255,136,0.35); }}
 
 /* ── Info panel ── */
 .info-panel {{
-    background: rgba(0,212,255,0.05);
-    border: 1px solid rgba(0,212,255,0.15);
+    background: rgba(192,132,252,0.05);
+    border: 1px solid rgba(192,132,252,0.15);
     border-radius: 10px;
     padding: 14px 18px;
     font-size: 0.85rem;
@@ -447,7 +447,7 @@ p, li, label {{ color: var(--text) !important; }}
 
 /* ── Buttons ── */
 .stButton > button {{
-    background: linear-gradient(135deg, rgba(0,212,255,0.1), rgba(0,255,136,0.08)) !important;
+    background: linear-gradient(135deg, rgba(192,132,252,0.1), rgba(0,255,136,0.08)) !important;
     border: 1px solid {NEON_BLUE} !important;
     color: {NEON_BLUE} !important;
     font-family: 'Inter', sans-serif !important;
@@ -459,12 +459,12 @@ p, li, label {{ color: var(--text) !important; }}
     text-transform: none !important;
 }}
 .stButton > button:hover {{
-    background: linear-gradient(135deg, rgba(0,212,255,0.22), rgba(0,255,136,0.15)) !important;
-    box-shadow: 0 0 18px rgba(0,212,255,0.25) !important;
+    background: linear-gradient(135deg, rgba(192,132,252,0.22), rgba(0,255,136,0.15)) !important;
+    box-shadow: 0 0 18px rgba(192,132,252,0.25) !important;
     transform: translateY(-1px) !important;
 }}
 .stDownloadButton > button {{
-    background: linear-gradient(135deg, rgba(0,255,136,0.1), rgba(0,212,255,0.08)) !important;
+    background: linear-gradient(135deg, rgba(0,255,136,0.1), rgba(192,132,252,0.08)) !important;
     border: 1px solid {NEON_GREEN} !important;
     color: {NEON_GREEN} !important;
     text-transform: none !important;
@@ -478,8 +478,8 @@ p, li, label {{ color: var(--text) !important; }}
 section[data-testid="stBottom"],
 section[data-testid="stBottom"] > div,
 section[data-testid="stBottom"] > div > div {{
-    background: #0d1526 !important;
-    background-color: #0d1526 !important;
+    background: #130828 !important;
+    background-color: #130828 !important;
 }}
 [data-testid="stChatInput"] {{
     border: 1px solid rgba(180,79,255,0.45) !important;
@@ -489,11 +489,11 @@ section[data-testid="stBottom"] > div > div {{
 [data-testid="stChatInput"] textarea,
 [data-testid="stChatInput"] input {{
     color: #e2eaf8 !important;
-    background: #0d1526 !important;
-    background-color: #0d1526 !important;
+    background: #130828 !important;
+    background-color: #130828 !important;
     font-size: 0.88rem !important;
     caret-color: {NEON_PURPLE} !important;
-    -webkit-box-shadow: 0 0 0 1000px #0d1526 inset !important;
+    -webkit-box-shadow: 0 0 0 1000px #130828 inset !important;
     -webkit-text-fill-color: #e2eaf8 !important;
 }}
 [data-testid="stChatInput"] textarea::placeholder,
@@ -514,7 +514,7 @@ section[data-testid="stBottom"] > div > div {{
 /* ── Chat messages ── */
 [data-testid="stChatMessage"] {{
     background: rgba(13,21,38,0.7) !important;
-    border: 1px solid rgba(0,212,255,0.08) !important;
+    border: 1px solid rgba(192,132,252,0.08) !important;
     border-radius: 14px !important;
     padding: 4px 8px !important;
     margin-bottom: 6px !important;
@@ -527,11 +527,11 @@ section[data-testid="stBottom"] > div > div {{
 /* ── Form inputs — control box ── */
 .stSelectbox > div > div,
 .stMultiSelect > div > div {{
-    background: linear-gradient(135deg, rgba(0,212,255,0.08) 0%, rgba(13,21,38,0.98) 100%) !important;
+    background: linear-gradient(135deg, rgba(192,132,252,0.08) 0%, rgba(13,21,38,0.98) 100%) !important;
     border: 1px solid {NEON_BLUE} !important;
     border-radius: 8px !important;
     color: #e2eaf8 !important;
-    box-shadow: 0 0 10px rgba(0,212,255,0.12), inset 0 1px 0 rgba(0,212,255,0.06) !important;
+    box-shadow: 0 0 10px rgba(192,132,252,0.12), inset 0 1px 0 rgba(192,132,252,0.06) !important;
     transition: border-color 0.2s, box-shadow 0.2s !important;
 }}
 .stSelectbox > div > div:focus-within,
@@ -572,7 +572,7 @@ ul[data-baseweb="menu"] > div {{
     background:       #07091a !important;
     border: 1px solid {NEON_BLUE} !important;
     border-radius: 10px !important;
-    box-shadow: 0 16px 56px rgba(0,0,0,0.85), 0 0 28px rgba(0,212,255,0.15) !important;
+    box-shadow: 0 16px 56px rgba(0,0,0,0.85), 0 0 28px rgba(192,132,252,0.15) !important;
     color: #e2eaf8 !important;
 }}
 /* Every item row — use all possible selectors */
@@ -593,8 +593,8 @@ li[role="option"] {{
 [data-baseweb="option"]:hover,
 div[role="option"]:hover,
 li[role="option"]:hover {{
-    background-color: rgba(0,212,255,0.14) !important;
-    background:       rgba(0,212,255,0.14) !important;
+    background-color: rgba(192,132,252,0.14) !important;
+    background:       rgba(192,132,252,0.14) !important;
     color: {NEON_BLUE} !important;
     border-left-color: {NEON_BLUE} !important;
     cursor: pointer !important;
@@ -613,7 +613,7 @@ li[role="option"][aria-selected="true"] {{
 /* "Select all" header */
 [data-baseweb="menu"] li:first-child,
 ul[data-baseweb="menu"] > div:first-child {{
-    border-bottom: 1px solid rgba(0,212,255,0.2) !important;
+    border-bottom: 1px solid rgba(192,132,252,0.2) !important;
     color: {NEON_PURPLE} !important;
     font-size: 0.78rem !important;
     letter-spacing: 0.08em !important;
@@ -626,18 +626,18 @@ div[data-baseweb="tooltip"] > div,
     background-color: #0d1a2e !important;
     background:       #0d1a2e !important;
     color: {NEON_BLUE} !important;
-    border: 1px solid rgba(0,212,255,0.35) !important;
+    border: 1px solid rgba(192,132,252,0.35) !important;
     border-radius: 6px !important;
     font-size: 0.82rem !important;
     box-shadow: 0 4px 16px rgba(0,0,0,0.6) !important;
 }}
 /* Multi-select tags (chips) — cycle vivid colors */
 [data-baseweb="tag"] {{
-    background: linear-gradient(135deg, rgba(0,212,255,0.2), rgba(180,79,255,0.15)) !important;
+    background: linear-gradient(135deg, rgba(192,132,252,0.2), rgba(180,79,255,0.15)) !important;
     border: 1px solid {NEON_BLUE} !important;
     border-radius: 6px !important;
     color: #e2eaf8 !important;
-    box-shadow: 0 0 6px rgba(0,212,255,0.2) !important;
+    box-shadow: 0 0 6px rgba(192,132,252,0.2) !important;
     font-weight: 600 !important;
     font-size: 0.78rem !important;
 }}
@@ -647,11 +647,11 @@ div[data-baseweb="tooltip"] > div,
 
 /* ── Text input ── */
 .stTextInput > div > div > input {{
-    background: #0d1526 !important;
+    background: #130828 !important;
     border: 1px solid {NEON_BLUE} !important;
     border-radius: 8px !important;
     color: #e2eaf8 !important;
-    box-shadow: 0 0 8px rgba(0,212,255,0.1) !important;
+    box-shadow: 0 0 8px rgba(192,132,252,0.1) !important;
     font-weight: 500 !important;
     font-size: 0.88rem !important;
 }}
@@ -668,7 +668,7 @@ input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
 input:-webkit-autofill:active {{
-    -webkit-box-shadow: 0 0 0 1000px #0d1526 inset !important;
+    -webkit-box-shadow: 0 0 0 1000px #130828 inset !important;
     -webkit-text-fill-color: #e2eaf8 !important;
     caret-color: #e2eaf8 !important;
     border: 1px solid {NEON_BLUE} !important;
@@ -683,20 +683,20 @@ input:-webkit-autofill:active {{
     font-weight: 600 !important;
     letter-spacing: 0.06em !important;
     text-transform: uppercase !important;
-    text-shadow: 0 0 8px rgba(0,212,255,0.4) !important;
+    text-shadow: 0 0 8px rgba(192,132,252,0.4) !important;
 }}
 
 /* ── File uploader ── */
 [data-testid="stFileUploader"] {{
-    background: rgba(0,212,255,0.04) !important;
-    border: 1px dashed rgba(0,212,255,0.3) !important;
+    background: rgba(192,132,252,0.04) !important;
+    border: 1px dashed rgba(192,132,252,0.3) !important;
     border-radius: 10px !important;
 }}
 [data-testid="stFileUploader"] span,
 [data-testid="stFileUploader"] p,
 [data-testid="stFileDropzoneInstructions"] {{ color: #6c7a9c !important; }}
 [data-testid="stFileUploader"] button {{
-    background: rgba(0,212,255,0.12) !important;
+    background: rgba(192,132,252,0.12) !important;
     border: 1px solid {NEON_BLUE} !important;
     color: {NEON_BLUE} !important;
     border-radius: 6px !important;
@@ -708,14 +708,14 @@ div[data-testid="stNotification"] {{ border-radius: 8px !important; }}
 
 /* ── Expander ── */
 details summary {{
-    background: linear-gradient(135deg, rgba(0,212,255,0.08), rgba(180,79,255,0.05)) !important;
-    border: 1px solid rgba(0,212,255,0.4) !important;
+    background: linear-gradient(135deg, rgba(192,132,252,0.08), rgba(180,79,255,0.05)) !important;
+    border: 1px solid rgba(192,132,252,0.4) !important;
     border-radius: 8px !important;
     color: {NEON_BLUE} !important;
     padding: 10px 14px !important;
     font-weight: 600 !important;
     letter-spacing: 0.04em !important;
-    box-shadow: 0 0 10px rgba(0,212,255,0.08) !important;
+    box-shadow: 0 0 10px rgba(192,132,252,0.08) !important;
 }}
 details[open] summary {{
     border-color: {NEON_GREEN} !important;
@@ -724,7 +724,7 @@ details[open] summary {{
 }}
 details > div {{
     background: rgba(7,9,26,0.92) !important;
-    border: 1px solid rgba(0,212,255,0.18) !important;
+    border: 1px solid rgba(192,132,252,0.18) !important;
     border-top: none !important;
     border-radius: 0 0 8px 8px !important;
     padding: 14px !important;
@@ -740,7 +740,7 @@ details > div {{
 /* ── Scrollbar ── */
 ::-webkit-scrollbar {{ width: 5px; height: 5px; }}
 ::-webkit-scrollbar-track {{ background: {BG_DARK}; }}
-::-webkit-scrollbar-thumb {{ background: rgba(0,212,255,0.25); border-radius: 3px; }}
+::-webkit-scrollbar-thumb {{ background: rgba(192,132,252,0.25); border-radius: 3px; }}
 ::-webkit-scrollbar-thumb:hover {{ background: {NEON_BLUE}; }}
 
 /* ── Divider ── */
@@ -749,7 +749,7 @@ hr {{ border-color: var(--border) !important; margin: 20px 0 !important; }}
 /* ── Sidebar logo ── */
 .sidebar-logo {{
     padding: 24px 16px 20px;
-    border-bottom: 1px solid rgba(0,212,255,0.08);
+    border-bottom: 1px solid rgba(192,132,252,0.08);
     margin-bottom: 12px;
 }}
 .sidebar-logo-title {{
@@ -796,13 +796,13 @@ body [data-baseweb="popover"] [aria-selected="true"] {{
 }}
 body [data-baseweb="popover"] li:hover,
 body [data-baseweb="popover"] [role="option"]:hover {{
-    background-color: rgba(0,212,255,0.14) !important;
+    background-color: rgba(192,132,252,0.14) !important;
     color: {NEON_BLUE} !important;
 }}
 body [data-baseweb="popover"] > div > div > div:first-child > div {{
     border: 1px solid {NEON_BLUE} !important;
     border-radius: 10px !important;
-    box-shadow: 0 16px 56px rgba(0,0,0,0.85), 0 0 30px rgba(0,212,255,0.15) !important;
+    box-shadow: 0 16px 56px rgba(0,0,0,0.85), 0 0 30px rgba(192,132,252,0.15) !important;
     overflow: hidden !important;
 }}
 </style>
@@ -896,6 +896,14 @@ def process_data(df: pd.DataFrame, state_overrides: dict, assign_overrides: dict
     for col in df.select_dtypes(include="object").columns:
         df[col] = df[col].fillna("").astype(str).str.strip()
 
+    # Fix Application ID — strip decimal suffix (e.g. 12345.0 → 12345)
+    if "Application ID" in df.columns:
+        df["Application ID"] = (df["Application ID"]
+            .astype(str)
+            .str.replace(r'\.0+$', '', regex=True)
+            .str.strip()
+            .replace('nan', ''))
+
     # Request Type — use CSV column directly; fall back to keyword detection only if blank
     df["Request Type"] = df.apply(
         lambda r: r["Request Type"] if r["Request Type"].strip() != ""
@@ -951,6 +959,15 @@ def process_data(df: pd.DataFrame, state_overrides: dict, assign_overrides: dict
 
     # Clean Assigned To for workload  — blank → empty string
     df["Assigned To Clean"] = df["Assigned To"].apply(lambda x: "" if _is_blank(x) else x.strip())
+
+    # Engineer group overrides — force specific engineers into their correct group
+    ENGINEER_GROUP_OVERRIDES = {
+        "Sriram Balasubramanian": "ITIT-CSAppSec-Global-Support-L1",
+    }
+    for eng, grp in ENGINEER_GROUP_OVERRIDES.items():
+        mask = df["Assigned To Clean"] == eng
+        if mask.any():
+            df.loc[mask, "Primary Group"] = grp
 
     return df
 
@@ -1010,7 +1027,7 @@ def horizontal_bar(series: pd.Series, title: str, color_scale=None):
     labels = series.index.tolist()
     if color_scale is None:
         mx = max(vals) if vals else 1
-        colors = [f"rgba(0,{int(212*(v/mx))},{int(255*(v/mx))},0.75)" for v in vals]
+        colors = [f"rgba({int(192*(v/mx))},{int(132*(v/mx))},{int(252*(v/mx))},0.80)" for v in vals]
     else:
         colors = color_scale
     fig = go.Figure(go.Bar(
@@ -1069,26 +1086,23 @@ def page_overview(df: pd.DataFrame):
     rejected_t = (df["State"] == "Rejected").sum()
     closed_t   = (df["State"] == "Closed").sum()
     unasgn_t   = (df["Assigned To Clean"] == "").sum()
-    breached   = int(df["SLA Breached"].sum())
-    breach_pct = breached / total * 100 if total else 0
+    eng_count  = df[df["Assigned To Clean"] != ""]["Assigned To Clean"].nunique()
 
     pending_pct = f"{pending_t/total*100:.0f}% of total"
     closed_pct  = f"{closed_t/total*100:.0f}% complete"
-    ontime_pct  = f"{(total-breached)/total*100:.0f}% compliance"
-    breach_lbl  = f"{breach_pct:.1f}% breach rate"
 
     render_kpis([
-        (f"{total:,}",      "Total Tickets",         NEON_BLUE,   "📋", ""),
-        (f"{pending_t:,}",  "Pending for Review",    NEON_ORANGE, "🕐", pending_pct),
-        (f"{clarify_t:,}",  "Sent for Clarification",NEON_BLUE,   "💬", ""),
-        (f"{closed_t:,}",   "Closed",                NEON_GREEN,  "✅", closed_pct),
+        (f"{total:,}",      "Total Tickets",          NEON_BLUE,   "📋", ""),
+        (f"{pending_t:,}",  "Pending for Review",     NEON_ORANGE, "🕐", pending_pct),
+        (f"{clarify_t:,}",  "Sent for Clarification", NEON_PURPLE, "💬", ""),
+        (f"{closed_t:,}",   "Closed",                 NEON_GREEN,  "✅", closed_pct),
     ])
     st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
     render_kpis([
-        (f"{unasgn_t:,}",       "Unassigned",  NEON_ORANGE, "⚠️", "needs assignment"),
-        (f"{rejected_t:,}",     "Rejected",    NEON_RED,    "❌", ""),
-        (f"{breached:,}",       "SLA Breached",NEON_RED,    "🚨", breach_lbl),
-        (f"{total-breached:,}", "On-Time",     NEON_GREEN,  "🎯", ontime_pct),
+        (f"{unasgn_t:,}",   "Unassigned",      NEON_ORANGE, "⚠️", "needs assignment"),
+        (f"{rejected_t:,}", "Rejected",         NEON_RED,    "❌", ""),
+        (f"{eng_count:,}",  "Active Engineers", NEON_BLUE,   "👷", "with open tickets"),
+        (f"{pending_t+clarify_t:,}", "Open Tickets", NEON_PINK, "📂", "pending + clarification"),
     ])
 
     st.markdown(section_hdr("State Distribution & Request Types", ""), unsafe_allow_html=True)
@@ -1105,8 +1119,8 @@ def page_overview(df: pd.DataFrame):
 
     st.markdown(section_hdr("Group Distribution"), unsafe_allow_html=True)
 
-    grp_counts = df["Primary Group"].value_counts().head(8)
-    st.plotly_chart(vertical_bar(grp_counts, "Tickets by Assigned Group"), use_container_width=True)
+    grp_counts = df["Primary Group"].replace("Unassigned", float("nan")).dropna().value_counts()
+    st.plotly_chart(horizontal_bar(grp_counts, "Tickets by Assigned Group"), use_container_width=True)
 
 # ─── Page: Workload Distribution ─────────────────────────────────────────────
 
@@ -1204,21 +1218,31 @@ def page_workload(df: pd.DataFrame):
                     .drop_duplicates("Assigned To Clean")
                     .set_index("Assigned To Clean")["Primary Group"])
 
+    # Primary App ID per engineer (most frequent non-blank)
+    _app_id_map = (
+        wdf[wdf["Application ID"] != ""]
+        .groupby("Assigned To Clean")["Application ID"]
+        .agg(lambda x: x.mode().iloc[0] if len(x) > 0 else "")
+    )
+
     summary = (wdf.groupby("Assigned To Clean")
                   .agg(
                       Total_Assigned=("Request ID", "count"),
                       Open_Issues=("State", lambda x: (x.isin(["Pending for Review", "Sent for Clarification"])).sum()),
+                      Unique_Apps=("Application ID", lambda x: x[x != ""].nunique()),
                   )
                   .reset_index()
                   .rename(columns={
                       "Assigned To Clean": "Engineer",
                       "Total_Assigned":    "Total Assigned",
                       "Open_Issues":       "Open Issues",
+                      "Unique_Apps":       "Unique Apps",
                   })
                   .sort_values("Total Assigned", ascending=False)
                   .reset_index(drop=True))
 
     summary["Assigned Group"] = summary["Engineer"].map(eng_group)
+    summary["Application ID"] = summary["Engineer"].map(_app_id_map).fillna("")
 
     def workload_label(n):
         if n <= 5:  return "Optimal"
@@ -1228,12 +1252,14 @@ def page_workload(df: pd.DataFrame):
     summary["Workload"] = summary["Total Assigned"].apply(workload_label)
 
     st.dataframe(
-        summary[["Engineer", "Assigned Group", "Total Assigned", "Open Issues", "Workload"]],
+        summary[["Engineer", "Assigned Group", "Application ID", "Unique Apps",
+                 "Total Assigned", "Open Issues", "Workload"]],
         use_container_width=True,
         hide_index=True,
         column_config={
             "Total Assigned": st.column_config.NumberColumn(format="%d"),
             "Open Issues":    st.column_config.NumberColumn(format="%d"),
+            "Unique Apps":    st.column_config.NumberColumn(format="%d"),
         },
     )
 
@@ -1253,18 +1279,30 @@ def page_unassigned(df: pd.DataFrame):
         "Pending for Review tickets awaiting assignment — sorted by priority and age",
         NEON_ORANGE), unsafe_allow_html=True)
 
+    # Sort by Application Security Prioritization (highest first), then by Days Open
+    _APPSEC_ORDER = {"critical": 4, "high": 3, "medium": 2, "low": 1,
+                     "tier 1": 4, "tier 2": 3, "tier 3": 2, "tier 4": 1}
+
     unassigned = df[
         (df["State"] == "Pending for Review") & (df["Assigned To Clean"] == "")
-    ].copy().sort_values(["Priority Score", "Days Open"], ascending=[False, False])
+    ].copy()
+    unassigned["_sort_prio"] = (
+        unassigned["Application Security Prioritization"]
+        .str.lower().str.strip()
+        .map(lambda x: _APPSEC_ORDER.get(x, 0))
+    )
+    unassigned = unassigned.sort_values(["_sort_prio", "Days Open"],
+                                        ascending=[False, False]).drop(columns=["_sort_prio"])
 
-    total_u  = len(unassigned)
-    crit_u   = (unassigned["Priority"] == "Critical").sum()
-    breach_u = int(unassigned["SLA Breached"].sum())
+    total_u = len(unassigned)
+    high_u  = int(unassigned["Application Security Prioritization"].str.lower().str.strip()
+                  .isin(["critical", "high", "tier 1", "tier 2"]).sum())
+    blank_u = int((unassigned["Application Security Prioritization"].str.strip() == "").sum())
 
     render_kpis([
-        (f"{total_u:,}",  "Unassigned Tickets", NEON_ORANGE, "📭", ""),
-        (f"{crit_u:,}",   "Critical Priority",  NEON_RED,    "🚨", "immediate action needed"),
-        (f"{breach_u:,}", "SLA Breached",        NEON_RED,    "⏰", "past SLA deadline"),
+        (f"{total_u:,}", "Unassigned Tickets",  NEON_ORANGE, "📭", ""),
+        (f"{high_u:,}",  "High / Critical",      NEON_RED,    "🚨", "immediate action needed"),
+        (f"{blank_u:,}", "No Prioritization",    NEON_PURPLE, "❓", "blank AppSec priority"),
     ])
 
     if unassigned.empty:
@@ -1274,18 +1312,32 @@ def page_unassigned(df: pd.DataFrame):
 
     st.markdown(section_hdr("Filter Queue"), unsafe_allow_html=True)
 
-    f1, f2, f3 = st.columns(3)
+    # Get actual AppSec prioritization values present in data
+    _raw_prios = unassigned["Application Security Prioritization"].str.strip().unique().tolist()
+    _prio_opts = sorted([p for p in _raw_prios if p != ""], key=lambda x: _APPSEC_ORDER.get(x.lower(), 0), reverse=True)
+    if "" in _raw_prios:
+        _prio_opts.append("(Blank)")
+
+    f1, f2 = st.columns(2)
     with f1:
-        prio_f = st.multiselect("Priority", ["Critical", "High", "Medium", "Low"], key="uq_prio")
+        prio_f = st.multiselect("App Security Prioritization", _prio_opts, key="uq_prio")
     with f2:
         type_f = st.multiselect("Request Type", sorted(unassigned["Request Type"].unique()), key="uq_type")
-    with f3:
-        breach_only = st.checkbox("SLA Breached only", key="uq_breach")
 
     filtered = unassigned.copy()
-    if prio_f:       filtered = filtered[filtered["Priority"].isin(prio_f)]
-    if type_f:       filtered = filtered[filtered["Request Type"].isin(type_f)]
-    if breach_only:  filtered = filtered[filtered["SLA Breached"]]
+    if prio_f:
+        named = [v for v in prio_f if v != "(Blank)"]
+        if "(Blank)" in prio_f and named:
+            filtered = filtered[
+                filtered["Application Security Prioritization"].str.strip().isin(named) |
+                (filtered["Application Security Prioritization"].str.strip() == "")
+            ]
+        elif "(Blank)" in prio_f:
+            filtered = filtered[filtered["Application Security Prioritization"].str.strip() == ""]
+        else:
+            filtered = filtered[filtered["Application Security Prioritization"].str.strip().isin(named)]
+    if type_f:
+        filtered = filtered[filtered["Request Type"].isin(type_f)]
 
     st.markdown(f'<div style="font-size:0.82rem;color:#6c7a9c;margin-bottom:8px">'
                 f'Showing <b style="color:#cdd6f4">{len(filtered)}</b> tickets</div>',
@@ -1294,7 +1346,7 @@ def page_unassigned(df: pd.DataFrame):
     show_cols = [c for c in ["Request ID", "Application ID", "Portfolio Name",
                              "Application Name", "Request Type", "State",
                              "App Exposure", "Application Security Prioritization",
-                             "Assigned Group", "SLA Breached"] if c in filtered.columns]
+                             "Assigned Group"] if c in filtered.columns]
     st.dataframe(filtered[show_cols], use_container_width=True, hide_index=True)
 
     st.markdown(section_hdr("Quick Assign"), unsafe_allow_html=True)
@@ -1475,7 +1527,7 @@ def page_analytics(df: pd.DataFrame):
 
     fig5 = go.Figure()
     fig5.add_trace(go.Bar(x=monthly.index.tolist(), y=monthly["Total"].tolist(),
-                          name="Total", marker_color="rgba(0,212,255,0.25)", opacity=0.9))
+                          name="Total", marker_color="rgba(192,132,252,0.25)", opacity=0.9))
     fig5.add_trace(go.Bar(x=monthly.index.tolist(), y=monthly["Breached"].tolist(),
                           name="Breached", marker_color=NEON_RED, opacity=0.8))
     fig5.add_trace(go.Scatter(x=monthly.index.tolist(), y=monthly["Breach %"].tolist(),
@@ -2158,8 +2210,8 @@ def page_copilot(df: pd.DataFrame):
             <div style='font-size:0.65rem;color:#6c7a9c;text-transform:uppercase;
                 letter-spacing:0.1em'>Unassigned</div>
         </div>
-        <div style='flex:1;min-width:110px;background:rgba(0,212,255,0.07);
-            border:1px solid rgba(0,212,255,0.2);border-radius:10px;padding:10px 14px'>
+        <div style='flex:1;min-width:110px;background:rgba(192,132,252,0.07);
+            border:1px solid rgba(192,132,252,0.2);border-radius:10px;padding:10px 14px'>
             <div style='font-family:Orbitron,monospace;font-size:1.2rem;font-weight:700;
                 color:{NEON_BLUE}'>{eng_count}</div>
             <div style='font-size:0.65rem;color:#6c7a9c;text-transform:uppercase;
@@ -2581,7 +2633,7 @@ def _render_briefing_output(text: str, today: datetime):
     # Top accent bar + metadata ribbon
     st.markdown(f"""
     <div style='
-        background: linear-gradient(135deg, rgba(0,255,136,0.08) 0%, rgba(0,212,255,0.04) 100%);
+        background: linear-gradient(135deg, rgba(0,255,136,0.08) 0%, rgba(192,132,252,0.04) 100%);
         border: 1px solid rgba(0,255,136,0.3);
         border-left: 4px solid {NEON_GREEN};
         border-radius: 0 14px 14px 0;
@@ -2896,7 +2948,6 @@ def render_sidebar():
             "Workload Distribution",
             "Unassigned Queue",
             "Ticket Tracker",
-            "SLA & Analytics",
             _SEP,               # ← separator / section header (CSS makes it non-clickable)
             "AI Copilot",
             "Weekly Briefing",
@@ -2922,7 +2973,7 @@ def render_sidebar():
             page = selected
             st.session_state["_nav_prev"] = page
 
-        st.markdown('<div style="margin:16px 0;border-top:1px solid rgba(0,212,255,0.08)"></div>',
+        st.markdown('<div style="margin:16px 0;border-top:1px solid rgba(192,132,252,0.08)"></div>',
                     unsafe_allow_html=True)
         st.markdown('<div style="font-size:0.62rem;letter-spacing:0.18em;text-transform:uppercase;color:#4a5568;padding:0 4px;margin-bottom:8px">Data Source</div>',
                     unsafe_allow_html=True)
@@ -2952,7 +3003,6 @@ def render_sidebar():
                 ("Rejected",           f"{int((df_s['State']=='Rejected').sum()):,}",                       NEON_RED),
                 ("Closed",             f"{int((df_s['State']=='Closed').sum()):,}",                         NEON_GREEN),
                 ("Unassigned",         f"{int((df_s['Assigned To Clean']=='').sum()):,}",                   NEON_ORANGE),
-                ("SLA Breached",       f"{int(df_s['SLA Breached'].sum()):,}",                              NEON_RED),
             ]
             for lbl, val, col in stats:
                 st.markdown(
@@ -2964,7 +3014,7 @@ def render_sidebar():
                     f"</div>",
                     unsafe_allow_html=True)
 
-        st.markdown('<div style="margin:16px 0;border-top:1px solid rgba(0,212,255,0.08)"></div>',
+        st.markdown('<div style="margin:16px 0;border-top:1px solid rgba(192,132,252,0.08)"></div>',
                     unsafe_allow_html=True)
 
         if st.button("Refresh Data", key="refresh"):
@@ -3044,8 +3094,8 @@ def main():
         _, card_col, _ = st.columns([1, 5, 1])
         with card_col:
             st.markdown(
-                f"<div style='background:linear-gradient(135deg,rgba(0,212,255,0.07),rgba(0,255,136,0.04));"
-                f"border:1px solid rgba(0,212,255,0.22);border-radius:14px;padding:24px 28px;text-align:center'>"
+                f"<div style='background:linear-gradient(135deg,rgba(192,132,252,0.07),rgba(0,255,136,0.04));"
+                f"border:1px solid rgba(192,132,252,0.22);border-radius:14px;padding:24px 28px;text-align:center'>"
                 f"<div style='font-size:0.65rem;letter-spacing:0.22em;text-transform:uppercase;"
                 f"color:{NEON_BLUE};margin-bottom:10px;font-weight:600'>Get Started</div>"
                 f"<div style='color:#cdd6f4;font-size:0.9rem;line-height:1.8'>"
@@ -3113,7 +3163,7 @@ def main():
     elif page == "Workload Distribution":  page_workload(df)
     elif page == "Unassigned Queue":       page_unassigned(df)
     elif page == "Ticket Tracker":         page_tracker(df)
-    elif page == "SLA & Analytics":        page_analytics(df)
+    # SLA & Analytics removed for this phase
     elif page == "AI Copilot":             page_copilot(df)
     elif page == "Weekly Briefing":        page_briefing(df)
     elif page == "ServiceNow Sync":        page_snow_sync(df)
