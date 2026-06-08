@@ -80,84 +80,86 @@ BCM_PRIORITY_MAP    = {"critical": 4, "high": 3, "medium": 2, "low": 1, "": 1}
 APPSEC_PRIORITY_MAP = {"critical": 4, "high": 3, "medium": 2, "low": 1,
                        "tier 1": 4, "tier 2": 3, "tier 3": 2, "tier 4": 1, "": 1}
 
-STATE_COLORS    = {"Pending for Review": "#ffa64d", "Sent for Clarification": "#c084fc", "Rejected": "#ff4b6e", "Closed": "#4ade80"}
-PRIORITY_COLORS = {"Critical": "#ff4b6e", "High": "#ffa64d", "Medium": "#c084fc", "Low": "#4ade80"}
+STATE_COLORS    = {"Pending for Review": "#d97706", "Sent for Clarification": "#7c3aed", "Rejected": "#dc2626", "Closed": "#059669"}
+PRIORITY_COLORS = {"Critical": "#dc2626", "High": "#d97706", "Medium": "#7c3aed", "Low": "#059669"}
 
-NEON_GREEN  = "#4ade80"
-NEON_BLUE   = "#c084fc"   # violet-purple (primary accent)
-NEON_PURPLE = "#b44fff"   # bright purple
-NEON_ORANGE = "#ffa64d"
-NEON_RED    = "#ff4b6e"
-NEON_PINK   = "#e879f9"   # magenta-purple
-BG_DARK     = "#0a0619"   # deep purple-black
-BG_CARD     = "#130828"   # dark purple card
-BORDER_DIM  = "rgba(192,132,252,0.15)"
+NEON_GREEN  = "#059669"   # emerald green
+NEON_BLUE   = "#818cf8"   # indigo blue
+NEON_PURPLE = "#7c3aed"   # vibrant purple (primary)
+NEON_ORANGE = "#d97706"   # amber
+NEON_RED    = "#dc2626"   # red
+NEON_PINK   = "#a855f7"   # purple-pink
+BG_DARK     = "#F7F8FC"   # light background
+BG_CARD     = "#FFFFFF"   # white card
+BORDER_DIM  = "rgba(124,58,237,0.15)"
 
-CHART_COLORS = [NEON_PURPLE, "#c084fc", NEON_PINK, NEON_GREEN, NEON_ORANGE,
-                NEON_RED, "#ddd6fe", "#7c3aed", "#c4b5fd", "#f0abfc"]
+CHART_COLORS = ["#7c3aed", "#a855f7", "#818cf8", "#059669", "#d97706",
+                "#dc2626", "#6d28d9", "#c084fc", "#10b981", "#f59e0b"]
 
 PLOTLY_BASE = dict(
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(family="Inter, sans-serif", color="#c4b5fd", size=12),
-    title_font=dict(family="Orbitron, monospace", color="#f0e6ff", size=13),
-    legend=dict(bgcolor="rgba(10,6,25,0.9)", bordercolor="rgba(192,132,252,0.2)", borderwidth=1,
-                font=dict(color="#e9d5ff", size=11)),
+    font=dict(family="Inter, sans-serif", color="#374151", size=12),
+    title_font=dict(family="Inter, sans-serif", color="#1e293b", size=13),
+    legend=dict(bgcolor="rgba(255,255,255,0.95)", bordercolor="rgba(124,58,237,0.2)", borderwidth=1,
+                font=dict(color="#374151", size=11)),
     margin=dict(l=40, r=24, t=52, b=36),
-    xaxis=dict(gridcolor="rgba(255,255,255,0.05)", zerolinecolor="rgba(255,255,255,0.05)",
-               tickfont=dict(color="#c4b5fd")),
-    yaxis=dict(gridcolor="rgba(255,255,255,0.05)", zerolinecolor="rgba(255,255,255,0.05)",
-               tickfont=dict(color="#c4b5fd")),
+    xaxis=dict(gridcolor="rgba(0,0,0,0.06)", zerolinecolor="rgba(0,0,0,0.06)",
+               tickfont=dict(color="#64748b")),
+    yaxis=dict(gridcolor="rgba(0,0,0,0.06)", zerolinecolor="rgba(0,0,0,0.06)",
+               tickfont=dict(color="#64748b")),
 )
 
 # ─── CSS ──────────────────────────────────────────────────────────────────────
 
-CSS = f"""
+CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-/* ── Reset & base ── */
-:root {{
-    --bg: {BG_DARK};
-    --card: {BG_CARD};
-    --green: {NEON_GREEN};
-    --blue: {NEON_BLUE};
-    --purple: {NEON_PURPLE};
-    --orange: {NEON_ORANGE};
-    --red: {NEON_RED};
-    --text: #cdd6f4;
-    --muted: #6c7a9c;
-    --border: {BORDER_DIM};
-}}
+/* ── Reset & base — LIGHT THEME ── */
+:root {
+    --bg: #F7F8FC;
+    --card: #FFFFFF;
+    --purple: #7c3aed;
+    --purple-mid: #a855f7;
+    --green: #059669;
+    --blue: #818cf8;
+    --orange: #d97706;
+    --red: #dc2626;
+    --text: #1e293b;
+    --muted: #64748b;
+    --border: rgba(124,58,237,0.15);
+}
 
-html, body, .stApp {{ background: var(--bg) !important; }}
+html, body, .stApp { background: var(--bg) !important; color: var(--text) !important; }
 
 /* Hide Streamlit chrome */
 header[data-testid="stHeader"],
 [data-testid="stToolbar"],
 [data-testid="stDecoration"],
 .stDeployButton,
-#MainMenu, footer {{ display: none !important; }}
+#MainMenu, footer { display: none !important; }
 
 /* Main content padding */
-.block-container {{ padding: 1.5rem 2rem 2rem !important; max-width: 1400px !important; }}
+.block-container { padding: 1.5rem 2rem 2rem !important; max-width: 1400px !important; }
 
 /* ── Sidebar ── */
-[data-testid="stSidebar"] {{
-    background: linear-gradient(180deg, #060215 0%, #0a0619 60%, #0d0822 100%) !important;
-    border-right: 1px solid rgba(192,132,252,0.12) !important;
-}}
-[data-testid="stSidebar"] > div {{ padding-top: 0 !important; }}
-[data-testid="stSidebar"] * {{ color: var(--text) !important; }}
+[data-testid="stSidebar"] {
+    background: #FFFFFF !important;
+    border-right: 1px solid rgba(124,58,237,0.12) !important;
+    box-shadow: 4px 0 20px rgba(124,58,237,0.05) !important;
+}
+[data-testid="stSidebar"] > div { padding-top: 0 !important; }
+[data-testid="stSidebar"] * { color: var(--text) !important; }
 
 /* ── Hide sidebar collapse/expand arrows ── */
-[data-testid="collapsedControl"] {{ display: none !important; }}
-button[data-testid="baseButton-headerNoPadding"] {{ display: none !important; }}
-[data-testid="stSidebarCollapseButton"] {{ display: none !important; }}
+[data-testid="collapsedControl"] { display: none !important; }
+button[data-testid="baseButton-headerNoPadding"] { display: none !important; }
+[data-testid="stSidebarCollapseButton"] { display: none !important; }
 
 /* Nav radio */
-[data-testid="stSidebar"] .stRadio > div {{ gap: 2px !important; }}
-[data-testid="stSidebar"] .stRadio label {{
+[data-testid="stSidebar"] .stRadio > div { gap: 2px !important; }
+[data-testid="stSidebar"] .stRadio label {
     font-family: 'Inter', sans-serif !important;
     font-size: 0.85rem !important;
     color: var(--muted) !important;
@@ -167,19 +169,26 @@ button[data-testid="baseButton-headerNoPadding"] {{ display: none !important; }}
     cursor: pointer;
     transition: all 0.2s !important;
     border: 1px solid transparent !important;
-}}
-[data-testid="stSidebar"] .stRadio label:hover {{
-    color: var(--blue) !important;
-    background: rgba(192,132,252,0.07) !important;
-    border-color: rgba(192,132,252,0.15) !important;
-}}
+}
+[data-testid="stSidebar"] .stRadio label:hover {
+    color: var(--purple) !important;
+    background: rgba(124,58,237,0.06) !important;
+    border-color: rgba(124,58,237,0.15) !important;
+}
+/* Active selected nav item */
+[data-testid="stSidebar"] .stRadio label:has(input:checked) {
+    color: var(--purple) !important;
+    background: rgba(124,58,237,0.08) !important;
+    border-color: rgba(124,58,237,0.2) !important;
+    font-weight: 600 !important;
+}
 
-/* ── Separator item (6th label = AI AGENTS header) ── */
-[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(5) {{
+/* ── Separator (5th label = AI AGENTS header) ── */
+[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(5) {
     pointer-events: none !important;
     cursor: default !important;
-    color: #b44fff !important;
-    font-size: 0.6rem !important;
+    color: var(--purple) !important;
+    font-size: 0.58rem !important;
     font-weight: 700 !important;
     letter-spacing: 0.2em !important;
     text-transform: uppercase !important;
@@ -187,112 +196,107 @@ button[data-testid="baseButton-headerNoPadding"] {{ display: none !important; }}
     background: transparent !important;
     padding: 12px 6px 4px !important;
     margin-top: 4px !important;
-    border-top: 1px solid rgba(180,79,255,0.3) !important;
+    border-top: 1px solid rgba(124,58,237,0.12) !important;
     border-radius: 0 !important;
-}}
-[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(5):hover {{
+}
+[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(5):hover {
     background: transparent !important;
-    border-color: rgba(180,79,255,0.3) !important;
-}}
-/* Hide radio circle on separator */
+}
 [data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(5) > div:first-child,
-[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(5) input {{
+[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(5) input {
     display: none !important;
-}}
+}
 
 /* ── Typography ── */
-h1 {{
-    font-family: 'Orbitron', monospace !important;
+h1 {
+    font-family: 'Inter', sans-serif !important;
     font-size: 1.5rem !important;
     font-weight: 700 !important;
     color: var(--text) !important;
-    letter-spacing: 0.06em !important;
+    letter-spacing: -0.01em !important;
     margin-bottom: 2px !important;
-}}
-h2 {{
-    font-family: 'Orbitron', monospace !important;
+}
+h2 {
+    font-family: 'Inter', sans-serif !important;
     font-size: 1.05rem !important;
-    color: var(--blue) !important;
-    letter-spacing: 0.04em !important;
-}}
-h3, h4 {{
+    color: var(--purple) !important;
+    font-weight: 600 !important;
+}
+h3, h4 {
     font-family: 'Inter', sans-serif !important;
     color: var(--text) !important;
     font-size: 0.95rem !important;
     font-weight: 600 !important;
-}}
-p, li, label {{ color: var(--text) !important; }}
+}
+p, li, label { color: var(--text) !important; }
 
-/* ── Markdown content (briefing, copilot responses) — force visible light text ── */
+/* ── Markdown content (briefing, copilot) ── */
 [data-testid="stMarkdown"] p,
 [data-testid="stMarkdown"] li,
-[data-testid="stMarkdown"] span {{
-    color: #dce8ff !important;
+[data-testid="stMarkdown"] span {
+    color: #374151 !important;
     font-size: 0.93rem !important;
     line-height: 1.75 !important;
-}}
-[data-testid="stMarkdown"] strong {{
-    color: #ffffff !important;
+}
+[data-testid="stMarkdown"] strong {
+    color: #111827 !important;
     font-weight: 600 !important;
-}}
+}
 [data-testid="stMarkdown"] h1,
-[data-testid="stMarkdown"] h2 {{
-    color: #00d4ff !important;
-    font-family: 'Orbitron', monospace !important;
-    letter-spacing: 0.04em !important;
+[data-testid="stMarkdown"] h2 {
+    color: var(--purple) !important;
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 700 !important;
     margin-top: 1.4rem !important;
     margin-bottom: 0.4rem !important;
-    border-bottom: 1px solid rgba(192,132,252,0.15) !important;
+    border-bottom: 1px solid rgba(124,58,237,0.15) !important;
     padding-bottom: 6px !important;
-}}
+}
 [data-testid="stMarkdown"] h3,
-[data-testid="stMarkdown"] h4 {{
-    color: #a3c4f3 !important;
+[data-testid="stMarkdown"] h4 {
+    color: #374151 !important;
     margin-top: 1rem !important;
-}}
-/* Briefing markdown tables */
-[data-testid="stMarkdown"] table {{
+}
+[data-testid="stMarkdown"] table {
     width: 100% !important;
     border-collapse: collapse !important;
     margin: 12px 0 !important;
-}}
-[data-testid="stMarkdown"] table th {{
-    color: #00d4ff !important;
-    background: rgba(192,132,252,0.07) !important;
-    border: 1px solid rgba(192,132,252,0.2) !important;
+}
+[data-testid="stMarkdown"] table th {
+    color: var(--purple) !important;
+    background: rgba(124,58,237,0.06) !important;
+    border: 1px solid rgba(124,58,237,0.15) !important;
     padding: 8px 14px !important;
     font-size: 0.82rem !important;
-    letter-spacing: 0.05em !important;
+    letter-spacing: 0.04em !important;
     text-transform: uppercase !important;
-}}
-[data-testid="stMarkdown"] table td {{
-    color: #dce8ff !important;
-    border: 1px solid rgba(255,255,255,0.07) !important;
+}
+[data-testid="stMarkdown"] table td {
+    color: #374151 !important;
+    border: 1px solid rgba(0,0,0,0.07) !important;
     padding: 7px 14px !important;
     font-size: 0.88rem !important;
-}}
-[data-testid="stMarkdown"] table tr:nth-child(even) td {{
-    background: rgba(255,255,255,0.02) !important;
-}}
-/* Bullet list markers */
-[data-testid="stMarkdown"] ul li::marker {{
-    color: #00d4ff !important;
-}}
-[data-testid="stMarkdown"] ol li::marker {{
-    color: #b44fff !important;
+}
+[data-testid="stMarkdown"] table tr:nth-child(even) td {
+    background: rgba(124,58,237,0.03) !important;
+}
+[data-testid="stMarkdown"] ul li::marker {
+    color: var(--purple) !important;
+}
+[data-testid="stMarkdown"] ol li::marker {
+    color: var(--purple) !important;
     font-weight: 700 !important;
-}}
-/* Horizontal rules in briefing */
-[data-testid="stMarkdown"] hr {{
-    border-color: rgba(192,132,252,0.15) !important;
+}
+[data-testid="stMarkdown"] hr {
+    border-color: rgba(124,58,237,0.12) !important;
     margin: 16px 0 !important;
-}}
+}
 
 /* ── KPI Cards ── */
-.kpi-row {{ display: flex; gap: 14px; margin-bottom: 14px; }}
-.kpi-card {{
+.kpi-row { display: flex; gap: 14px; margin-bottom: 14px; }
+.kpi-card {
     flex: 1;
-    background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
+    background: #FFFFFF;
     border: 1px solid var(--border);
     border-radius: 14px;
     padding: 18px 20px 16px;
@@ -300,511 +304,436 @@ p, li, label {{ color: var(--text) !important; }}
     overflow: hidden;
     transition: all 0.25s ease;
     cursor: default;
-}}
-.kpi-card::after {{
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 14px;
-    background: radial-gradient(ellipse at top left, var(--accent-color, rgba(192,132,252,0.06)) 0%, transparent 70%);
-    pointer-events: none;
-}}
-.kpi-card:hover {{
-    border-color: var(--accent-color, rgba(192,132,252,0.3));
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(124,58,237,0.05);
+}
+.kpi-card:hover {
+    border-color: var(--accent-color, rgba(124,58,237,0.35));
     transform: translateY(-3px);
-    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
-}}
-.kpi-top-bar {{
+    box-shadow: 0 8px 28px rgba(124,58,237,0.12);
+}
+.kpi-top-bar {
     position: absolute;
     top: 0; left: 0; right: 0;
     height: 3px;
     border-radius: 14px 14px 0 0;
-    background: var(--accent-color, {NEON_BLUE});
-    opacity: 0.7;
-}}
-.kpi-icon {{
+    background: var(--accent-color, #7c3aed);
+}
+.kpi-icon {
     font-size: 1.1rem;
     margin-bottom: 8px;
     opacity: 0.8;
-}}
-.kpi-value {{
-    font-family: 'Orbitron', monospace;
+}
+.kpi-value {
+    font-family: 'Inter', sans-serif;
     font-size: 2rem;
-    font-weight: 700;
-    color: var(--accent-color, {NEON_BLUE});
+    font-weight: 800;
+    color: var(--accent-color, #7c3aed);
     line-height: 1;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.03em;
     margin-bottom: 5px;
-}}
-.kpi-label {{
+}
+.kpi-label {
     font-size: 0.7rem;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.1em;
     color: var(--muted);
     font-weight: 500;
-}}
-.kpi-sub {{
+}
+.kpi-sub {
     font-size: 0.75rem;
     color: var(--muted);
     margin-top: 4px;
 }}
 
 /* ── Section header ── */
-.section-header {{
+.section-header {
     display: flex;
     align-items: center;
     gap: 10px;
     margin: 24px 0 14px;
     padding-bottom: 10px;
     border-bottom: 1px solid var(--border);
-}}
-.section-header-title {{
-    font-family: 'Orbitron', monospace;
-    font-size: 0.8rem;
-    letter-spacing: 0.12em;
+}
+.section-header-title {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--blue);
-}}
-.section-dot {{
+    color: var(--purple);
+    font-weight: 700;
+}
+.section-dot {
     width: 6px; height: 6px;
     border-radius: 50%;
-    background: var(--blue);
-    box-shadow: 0 0 8px var(--blue);
-}}
+    background: var(--purple);
+}
 
 /* ── Page banner ── */
-.page-header {{
-    background: linear-gradient(135deg, rgba(192,132,252,0.06) 0%, rgba(180,79,255,0.04) 100%);
-    border: 1px solid rgba(192,132,252,0.12);
-    border-left: 3px solid {NEON_BLUE};
+.page-header {
+    background: linear-gradient(135deg, rgba(124,58,237,0.04) 0%, rgba(99,102,241,0.02) 100%);
+    border: 1px solid rgba(124,58,237,0.12);
+    border-left: 3px solid #7c3aed;
     border-radius: 0 12px 12px 0;
     padding: 14px 20px;
     margin-bottom: 20px;
-}}
-.page-title {{
-    font-family: 'Orbitron', monospace;
+}
+.page-title {
+    font-family: 'Inter', sans-serif;
     font-size: 1.3rem;
     font-weight: 700;
-    color: {NEON_BLUE};
-    letter-spacing: 0.06em;
+    color: #7c3aed;
+    letter-spacing: -0.01em;
     margin: 0;
-}}
-.page-sub {{
+}
+.page-sub {
     font-size: 0.82rem;
     color: var(--muted);
     margin-top: 3px;
-}}
+}
 
-/* ── Status pill ── */
-.pill {{
+/* ── Status pills ── */
+.pill {
     display: inline-block;
     padding: 3px 10px;
     border-radius: 20px;
     font-size: 0.7rem;
     font-weight: 600;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
-}}
-.pill-open     {{ background: rgba(255,75,110,0.15); color: {NEON_RED};    border: 1px solid rgba(255,75,110,0.35); }}
-.pill-assigned {{ background: rgba(255,166,77,0.15); color: {NEON_ORANGE}; border: 1px solid rgba(255,166,77,0.35); }}
-.pill-progress {{ background: rgba(192,132,252,0.15);  color: {NEON_BLUE};   border: 1px solid rgba(192,132,252,0.35); }}
-.pill-closed   {{ background: rgba(0,255,136,0.15);  color: {NEON_GREEN};  border: 1px solid rgba(0,255,136,0.35); }}
+}
+.pill-open     { background: rgba(220,38,38,0.08);  color: #dc2626; border: 1px solid rgba(220,38,38,0.2); }
+.pill-assigned { background: rgba(217,119,6,0.08);  color: #d97706; border: 1px solid rgba(217,119,6,0.2); }
+.pill-progress { background: rgba(124,58,237,0.08); color: #7c3aed; border: 1px solid rgba(124,58,237,0.2); }
+.pill-closed   { background: rgba(5,150,105,0.08);  color: #059669; border: 1px solid rgba(5,150,105,0.2); }
 
-/* ── Info panel ── */
-.info-panel {{
-    background: rgba(192,132,252,0.05);
-    border: 1px solid rgba(192,132,252,0.15);
+/* ── Info / warn / alert panels ── */
+.info-panel {
+    background: rgba(124,58,237,0.04);
+    border: 1px solid rgba(124,58,237,0.15);
     border-radius: 10px;
     padding: 14px 18px;
     font-size: 0.85rem;
     color: var(--text);
-}}
-.warn-panel {{
-    background: rgba(255,166,77,0.06);
-    border: 1px solid rgba(255,166,77,0.2);
+}
+.warn-panel {
+    background: rgba(217,119,6,0.05);
+    border: 1px solid rgba(217,119,6,0.18);
     border-radius: 10px;
     padding: 14px 18px;
     font-size: 0.85rem;
     color: var(--text);
-}}
-.alert-panel {{
-    background: rgba(255,75,110,0.06);
-    border: 1px solid rgba(255,75,110,0.2);
-    border-left: 3px solid {NEON_RED};
+}
+.alert-panel {
+    background: rgba(220,38,38,0.04);
+    border: 1px solid rgba(220,38,38,0.18);
+    border-left: 3px solid #dc2626;
     border-radius: 0 10px 10px 0;
     padding: 14px 18px;
     font-size: 0.85rem;
-}}
+    color: var(--text);
+}
 
-/* ── Workload badge ── */
-.wl-optimal  {{ color: {NEON_GREEN};  font-weight: 600; }}
-.wl-moderate {{ color: {NEON_ORANGE}; font-weight: 600; }}
-.wl-overload {{ color: {NEON_RED};    font-weight: 600; }}
+/* ── Workload badges ── */
+.wl-optimal  { color: #059669; font-weight: 600; }
+.wl-moderate { color: #d97706; font-weight: 600; }
+.wl-overload { color: #dc2626; font-weight: 600; }
 
 /* ── Dataframe tweaks ── */
-[data-testid="stDataFrame"] iframe {{ border-radius: 8px !important; }}
-.stDataFrame {{ border-radius: 8px !important; border: 1px solid var(--border) !important; }}
+[data-testid="stDataFrame"] iframe { border-radius: 8px !important; }
+.stDataFrame { border-radius: 8px !important; border: 1px solid var(--border) !important; }
 
 /* ── Buttons ── */
-.stButton > button {{
-    background: linear-gradient(135deg, rgba(192,132,252,0.1), rgba(0,255,136,0.08)) !important;
-    border: 1px solid {NEON_BLUE} !important;
-    color: {NEON_BLUE} !important;
+.stButton > button {
+    background: linear-gradient(135deg, #7c3aed, #6d28d9) !important;
+    border: none !important;
+    color: #ffffff !important;
     font-family: 'Inter', sans-serif !important;
     font-weight: 600 !important;
     font-size: 0.82rem !important;
-    letter-spacing: 0.03em !important;
     border-radius: 8px !important;
     transition: all 0.25s !important;
     text-transform: none !important;
-}}
-.stButton > button:hover {{
-    background: linear-gradient(135deg, rgba(192,132,252,0.22), rgba(0,255,136,0.15)) !important;
-    box-shadow: 0 0 18px rgba(192,132,252,0.25) !important;
+    box-shadow: 0 2px 8px rgba(124,58,237,0.2) !important;
+}
+.stButton > button:hover {
+    background: linear-gradient(135deg, #6d28d9, #5b21b6) !important;
+    box-shadow: 0 4px 16px rgba(124,58,237,0.3) !important;
     transform: translateY(-1px) !important;
-}}
-.stDownloadButton > button {{
-    background: linear-gradient(135deg, rgba(0,255,136,0.1), rgba(192,132,252,0.08)) !important;
-    border: 1px solid {NEON_GREEN} !important;
-    color: {NEON_GREEN} !important;
+}
+.stDownloadButton > button {
+    background: linear-gradient(135deg, #059669, #047857) !important;
+    border: none !important;
+    color: #ffffff !important;
     text-transform: none !important;
-}}
+    box-shadow: 0 2px 8px rgba(5,150,105,0.2) !important;
+}
 
-/* ── Chat input dark theme ── */
+/* ── Chat input — light theme ── */
 [data-testid="stChatInput"],
 [data-testid="stChatInput"] > div,
 [data-testid="stChatInput"] > div > div,
-[class*="stChatInput"],
 section[data-testid="stBottom"],
 section[data-testid="stBottom"] > div,
-section[data-testid="stBottom"] > div > div {{
-    background: #130828 !important;
-    background-color: #130828 !important;
-}}
-[data-testid="stChatInput"] {{
-    border: 1px solid rgba(180,79,255,0.45) !important;
+section[data-testid="stBottom"] > div > div {
+    background: #F7F8FC !important;
+    background-color: #F7F8FC !important;
+}
+[data-testid="stChatInput"] {
+    border: 1.5px solid rgba(124,58,237,0.35) !important;
     border-radius: 14px !important;
-    box-shadow: 0 0 28px rgba(180,79,255,0.12), inset 0 1px 0 rgba(180,79,255,0.08) !important;
-}}
+    box-shadow: 0 2px 12px rgba(124,58,237,0.08) !important;
+}
 [data-testid="stChatInput"] textarea,
-[data-testid="stChatInput"] input {{
-    color: #e2eaf8 !important;
-    background: #130828 !important;
-    background-color: #130828 !important;
+[data-testid="stChatInput"] input {
+    color: #1e293b !important;
+    background: #F7F8FC !important;
+    -webkit-box-shadow: 0 0 0 1000px #F7F8FC inset !important;
+    -webkit-text-fill-color: #1e293b !important;
     font-size: 0.88rem !important;
-    caret-color: {NEON_PURPLE} !important;
-    -webkit-box-shadow: 0 0 0 1000px #130828 inset !important;
-    -webkit-text-fill-color: #e2eaf8 !important;
-}}
+    caret-color: #7c3aed !important;
+}
 [data-testid="stChatInput"] textarea::placeholder,
-[data-testid="stChatInput"] input::placeholder {{
-    color: #6c7a9c !important;
+[data-testid="stChatInput"] input::placeholder {
+    color: #94a3b8 !important;
     font-style: italic !important;
-    -webkit-text-fill-color: #6c7a9c !important;
-}}
-[data-testid="stChatInput"] button {{
-    background: rgba(180,79,255,0.2) !important;
+    -webkit-text-fill-color: #94a3b8 !important;
+}
+[data-testid="stChatInput"] button {
+    background: #7c3aed !important;
     border-radius: 8px !important;
-    color: {NEON_PURPLE} !important;
-}}
-[data-testid="stChatInput"] button:hover {{
-    background: rgba(180,79,255,0.4) !important;
-}}
+    color: #ffffff !important;
+}
+[data-testid="stChatInput"] button:hover {
+    background: #6d28d9 !important;
+}
 
 /* ── Chat messages ── */
-[data-testid="stChatMessage"] {{
-    background: rgba(13,21,38,0.7) !important;
-    border: 1px solid rgba(192,132,252,0.08) !important;
+[data-testid="stChatMessage"] {
+    background: #FFFFFF !important;
+    border: 1px solid rgba(124,58,237,0.1) !important;
     border-radius: 14px !important;
     padding: 4px 8px !important;
     margin-bottom: 6px !important;
-}}
-[data-testid="stChatMessage"][data-testid*="assistant"] {{
-    border-color: rgba(180,79,255,0.15) !important;
-    background: rgba(180,79,255,0.04) !important;
-}}
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04) !important;
+}
 
-/* ── Form inputs — control box ── */
+/* ── Form inputs ── */
 .stSelectbox > div > div,
-.stMultiSelect > div > div {{
-    background: linear-gradient(135deg, rgba(192,132,252,0.08) 0%, rgba(13,21,38,0.98) 100%) !important;
-    border: 1px solid {NEON_BLUE} !important;
+.stMultiSelect > div > div {
+    background: #FFFFFF !important;
+    border: 1.5px solid rgba(124,58,237,0.22) !important;
     border-radius: 8px !important;
-    color: #e2eaf8 !important;
-    box-shadow: 0 0 10px rgba(192,132,252,0.12), inset 0 1px 0 rgba(192,132,252,0.06) !important;
-    transition: border-color 0.2s, box-shadow 0.2s !important;
-}}
+    color: #1e293b !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04) !important;
+    transition: border-color 0.2s !important;
+}
 .stSelectbox > div > div:focus-within,
-.stMultiSelect > div > div:focus-within {{
-    border-color: {NEON_GREEN} !important;
-    box-shadow: 0 0 0 2px rgba(0,255,136,0.18), 0 0 16px rgba(0,255,136,0.12) !important;
-}}
-/* Selected text & placeholder inside control */
+.stMultiSelect > div > div:focus-within {
+    border-color: #7c3aed !important;
+    box-shadow: 0 0 0 2px rgba(124,58,237,0.12) !important;
+}
 .stSelectbox [data-baseweb="select"] span,
 .stMultiSelect [data-baseweb="select"] span,
 .stSelectbox [data-baseweb="select"] div,
-.stMultiSelect [data-baseweb="select"] div {{
-    color: #e2eaf8 !important;
+.stMultiSelect [data-baseweb="select"] div {
+    color: #1e293b !important;
     background: transparent !important;
-    font-weight: 500 !important;
-}}
-/* Placeholder text */
-.stSelectbox input::placeholder,
-.stMultiSelect input::placeholder {{
-    color: #5a6a8a !important;
-}}
-/* Dropdown arrow icon */
-.stSelectbox svg, .stMultiSelect svg {{
-    fill: {NEON_BLUE} !important;
-}}
-/* ── Dropdown popup — nuclear dark override ── */
-/* Target every layer the BaseWeb portal renders */
+}
+.stSelectbox svg, .stMultiSelect svg {
+    fill: #7c3aed !important;
+}
+
+/* ── Dropdown popup — light override ── */
 [data-baseweb="popover"],
 [data-baseweb="popover"] > div,
-[data-baseweb="popover"] > div > div,
 [data-baseweb="select-dropdown"],
-[data-baseweb="select-dropdown"] > div,
 div[role="listbox"],
-div[role="listbox"] > div,
 ul[data-baseweb="menu"],
-ul[data-baseweb="menu"] > div {{
-    background-color: #07091a !important;
-    background:       #07091a !important;
-    border: 1px solid {NEON_BLUE} !important;
+ul[data-baseweb="menu"] > div {
+    background-color: #FFFFFF !important;
+    background: #FFFFFF !important;
+    border: 1px solid rgba(124,58,237,0.18) !important;
     border-radius: 10px !important;
-    box-shadow: 0 16px 56px rgba(0,0,0,0.85), 0 0 28px rgba(192,132,252,0.15) !important;
-    color: #e2eaf8 !important;
-}}
-/* Every item row — use all possible selectors */
+    box-shadow: 0 10px 40px rgba(124,58,237,0.1), 0 2px 8px rgba(0,0,0,0.06) !important;
+    color: #1e293b !important;
+}
 [data-baseweb="menu"] li,
 [data-baseweb="option"],
 div[role="option"],
-li[role="option"] {{
-    background-color: #07091a !important;
-    background:       #07091a !important;
-    color: #cdd6f4 !important;
+li[role="option"] {
+    background-color: #FFFFFF !important;
+    color: #374151 !important;
     font-size: 0.85rem !important;
     padding: 9px 16px !important;
     border-left: 3px solid transparent !important;
     transition: all 0.15s !important;
-}}
-/* Hover */
+}
 [data-baseweb="menu"] li:hover,
 [data-baseweb="option"]:hover,
 div[role="option"]:hover,
-li[role="option"]:hover {{
-    background-color: rgba(192,132,252,0.14) !important;
-    background:       rgba(192,132,252,0.14) !important;
-    color: {NEON_BLUE} !important;
-    border-left-color: {NEON_BLUE} !important;
+li[role="option"]:hover {
+    background-color: rgba(124,58,237,0.06) !important;
+    color: #7c3aed !important;
+    border-left-color: #7c3aed !important;
     cursor: pointer !important;
-}}
-/* Selected / checked */
+}
 [aria-selected="true"],
-[data-baseweb="option"][aria-selected="true"],
 div[role="option"][aria-selected="true"],
-li[role="option"][aria-selected="true"] {{
-    background-color: rgba(0,255,136,0.12) !important;
-    background:       rgba(0,255,136,0.12) !important;
-    color: {NEON_GREEN} !important;
-    border-left-color: {NEON_GREEN} !important;
+li[role="option"][aria-selected="true"] {
+    background-color: rgba(124,58,237,0.1) !important;
+    color: #7c3aed !important;
+    border-left-color: #7c3aed !important;
     font-weight: 700 !important;
-}}
-/* "Select all" header */
-[data-baseweb="menu"] li:first-child,
-ul[data-baseweb="menu"] > div:first-child {{
-    border-bottom: 1px solid rgba(192,132,252,0.2) !important;
-    color: {NEON_PURPLE} !important;
-    font-size: 0.78rem !important;
-    letter-spacing: 0.08em !important;
-    background-color: rgba(180,79,255,0.07) !important;
-    background:       rgba(180,79,255,0.07) !important;
-}}
-/* Tooltip inside popup (the "Corporate services IT systems - CWS..." full text) */
-div[data-baseweb="tooltip"] > div,
-[role="tooltip"] {{
-    background-color: #0d1a2e !important;
-    background:       #0d1a2e !important;
-    color: {NEON_BLUE} !important;
-    border: 1px solid rgba(192,132,252,0.35) !important;
+}
+[data-baseweb="tag"] {
+    background: rgba(124,58,237,0.1) !important;
+    border: 1px solid rgba(124,58,237,0.22) !important;
     border-radius: 6px !important;
-    font-size: 0.82rem !important;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.6) !important;
-}}
-/* Multi-select tags (chips) — cycle vivid colors */
-[data-baseweb="tag"] {{
-    background: linear-gradient(135deg, rgba(192,132,252,0.2), rgba(180,79,255,0.15)) !important;
-    border: 1px solid {NEON_BLUE} !important;
-    border-radius: 6px !important;
-    color: #e2eaf8 !important;
-    box-shadow: 0 0 6px rgba(192,132,252,0.2) !important;
+    color: #7c3aed !important;
     font-weight: 600 !important;
     font-size: 0.78rem !important;
-}}
-[data-baseweb="tag"] span {{ color: {NEON_BLUE} !important; font-weight: 700 !important; }}
-[data-baseweb="tag"] button {{ color: {NEON_BLUE} !important; opacity: 0.85; }}
-[data-baseweb="tag"] button:hover {{ color: {NEON_RED} !important; opacity: 1; }}
+}
+[data-baseweb="tag"] span { color: #7c3aed !important; }
+[data-baseweb="tag"] button { color: #7c3aed !important; }
+[data-baseweb="tag"] button:hover { color: #dc2626 !important; }
 
 /* ── Text input ── */
-.stTextInput > div > div > input {{
-    background: #130828 !important;
-    border: 1px solid {NEON_BLUE} !important;
+.stTextInput > div > div > input {
+    background: #FFFFFF !important;
+    border: 1.5px solid rgba(124,58,237,0.22) !important;
     border-radius: 8px !important;
-    color: #e2eaf8 !important;
-    box-shadow: 0 0 8px rgba(192,132,252,0.1) !important;
-    font-weight: 500 !important;
+    color: #1e293b !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04) !important;
     font-size: 0.88rem !important;
-}}
-.stTextInput > div > div > input::placeholder {{
-    color: #8892b0 !important;
+}
+.stTextInput > div > div > input::placeholder {
+    color: #94a3b8 !important;
     font-style: italic !important;
-}}
-.stTextInput > div > div > input:focus {{
-    border-color: {NEON_GREEN} !important;
-    box-shadow: 0 0 0 2px rgba(0,255,136,0.18), 0 0 16px rgba(0,255,136,0.1) !important;
-}}
-/* ── Browser autofill override — prevents white/yellow flash on filled fields ── */
+}
+.stTextInput > div > div > input:focus {
+    border-color: #7c3aed !important;
+    box-shadow: 0 0 0 2px rgba(124,58,237,0.12) !important;
+}
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
-input:-webkit-autofill:focus,
-input:-webkit-autofill:active {{
-    -webkit-box-shadow: 0 0 0 1000px #130828 inset !important;
-    -webkit-text-fill-color: #e2eaf8 !important;
-    caret-color: #e2eaf8 !important;
-    border: 1px solid {NEON_BLUE} !important;
-    border-radius: 8px !important;
+input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px #FFFFFF inset !important;
+    -webkit-text-fill-color: #1e293b !important;
+    border: 1.5px solid rgba(124,58,237,0.22) !important;
     transition: background-color 9999s ease-in-out 0s !important;
-}}
-/* Label text above all inputs */
+}
 .stTextInput label, .stSelectbox label,
-.stMultiSelect label, .stCheckbox label {{
-    color: {NEON_BLUE} !important;
+.stMultiSelect label, .stCheckbox label {
+    color: #374151 !important;
     font-size: 0.8rem !important;
     font-weight: 600 !important;
-    letter-spacing: 0.06em !important;
+    letter-spacing: 0.04em !important;
     text-transform: uppercase !important;
-    text-shadow: 0 0 8px rgba(192,132,252,0.4) !important;
-}}
+}
 
 /* ── File uploader ── */
-[data-testid="stFileUploader"] {{
-    background: rgba(192,132,252,0.04) !important;
-    border: 1px dashed rgba(192,132,252,0.3) !important;
+[data-testid="stFileUploader"] {
+    background: rgba(124,58,237,0.03) !important;
+    border: 1px dashed rgba(124,58,237,0.22) !important;
     border-radius: 10px !important;
-}}
+}
 [data-testid="stFileUploader"] span,
-[data-testid="stFileUploader"] p,
-[data-testid="stFileDropzoneInstructions"] {{ color: #6c7a9c !important; }}
-[data-testid="stFileUploader"] button {{
-    background: rgba(192,132,252,0.12) !important;
-    border: 1px solid {NEON_BLUE} !important;
-    color: {NEON_BLUE} !important;
+[data-testid="stFileUploader"] p { color: #64748b !important; }
+[data-testid="stFileUploader"] button {
+    background: rgba(124,58,237,0.08) !important;
+    border: 1px solid rgba(124,58,237,0.22) !important;
+    color: #7c3aed !important;
     border-radius: 6px !important;
-}}
+}
 
 /* ── Alerts ── */
-.stAlert > div {{ border-radius: 8px !important; }}
-div[data-testid="stNotification"] {{ border-radius: 8px !important; }}
+.stAlert > div { border-radius: 8px !important; }
 
 /* ── Expander ── */
-details summary {{
-    background: linear-gradient(135deg, rgba(192,132,252,0.08), rgba(180,79,255,0.05)) !important;
-    border: 1px solid rgba(192,132,252,0.4) !important;
+details summary {
+    background: rgba(124,58,237,0.04) !important;
+    border: 1px solid rgba(124,58,237,0.2) !important;
     border-radius: 8px !important;
-    color: {NEON_BLUE} !important;
+    color: #7c3aed !important;
     padding: 10px 14px !important;
     font-weight: 600 !important;
-    letter-spacing: 0.04em !important;
-    box-shadow: 0 0 10px rgba(192,132,252,0.08) !important;
-}}
-details[open] summary {{
-    border-color: {NEON_GREEN} !important;
-    color: {NEON_GREEN} !important;
-    box-shadow: 0 0 12px rgba(0,255,136,0.12) !important;
-}}
-details > div {{
-    background: rgba(7,9,26,0.92) !important;
-    border: 1px solid rgba(192,132,252,0.18) !important;
+}
+details[open] summary {
+    border-color: #059669 !important;
+    color: #059669 !important;
+}
+details > div {
+    background: #FFFFFF !important;
+    border: 1px solid rgba(124,58,237,0.1) !important;
     border-top: none !important;
     border-radius: 0 0 8px 8px !important;
     padding: 14px !important;
-}}
-
-/* ── Checkbox ── */
-.stCheckbox > label {{
-    color: {NEON_ORANGE} !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.04em !important;
-}}
+}
 
 /* ── Scrollbar ── */
-::-webkit-scrollbar {{ width: 5px; height: 5px; }}
-::-webkit-scrollbar-track {{ background: {BG_DARK}; }}
-::-webkit-scrollbar-thumb {{ background: rgba(192,132,252,0.25); border-radius: 3px; }}
-::-webkit-scrollbar-thumb:hover {{ background: {NEON_BLUE}; }}
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #F7F8FC; }
+::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #7c3aed; }
 
 /* ── Divider ── */
-hr {{ border-color: var(--border) !important; margin: 20px 0 !important; }}
+hr { border-color: var(--border) !important; margin: 20px 0 !important; }
 
 /* ── Sidebar logo ── */
-.sidebar-logo {{
+.sidebar-logo {
     padding: 24px 16px 20px;
-    border-bottom: 1px solid rgba(192,132,252,0.08);
+    border-bottom: 1px solid rgba(124,58,237,0.1);
     margin-bottom: 12px;
-}}
-.sidebar-logo-title {{
-    font-family: 'Orbitron', monospace;
+}
+.sidebar-logo-title {
+    font-family: 'Inter', sans-serif;
     font-size: 1rem;
-    font-weight: 900;
-    background: linear-gradient(135deg, {NEON_BLUE}, {NEON_GREEN});
+    font-weight: 800;
+    background: linear-gradient(135deg, #7c3aed, #a855f7);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    letter-spacing: 0.1em;
     line-height: 1.2;
-}}
-.sidebar-logo-sub {{
+}
+.sidebar-logo-sub {
     font-size: 0.62rem;
-    letter-spacing: 0.2em;
-    color: #4a5568;
+    letter-spacing: 0.18em;
+    color: #94a3b8;
     text-transform: uppercase;
     margin-top: 4px;
-}}
+}
 
 /* ── Quick stats in sidebar ── */
-.sidebar-stat {{
+.sidebar-stat {
     display: flex;
     justify-content: space-between;
-    align-items: center;
     padding: 6px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
     font-size: 0.82rem;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
-}}
-.sidebar-stat-label {{ color: #6c7a9c; }}
-.sidebar-stat-value {{ font-weight: 600; font-family: 'Orbitron', monospace; font-size: 0.78rem; }}
+}
 
-/* ── GLOBAL portal dark fix (BaseWeb renders outside .stApp) ── */
+/* ── Global portal light override ── */
 body [data-baseweb="popover"],
-body [data-baseweb="popover"] *:not(svg):not(path) {{
-    background-color: #07091a !important;
-    color: #cdd6f4 !important;
-}}
-body [data-baseweb="popover"] [aria-selected="true"] {{
-    background-color: rgba(0,255,136,0.12) !important;
-    color: {NEON_GREEN} !important;
+body [data-baseweb="popover"] *:not(svg):not(path) {
+    background-color: #FFFFFF !important;
+    color: #374151 !important;
+}
+body [data-baseweb="popover"] [aria-selected="true"] {
+    background-color: rgba(124,58,237,0.1) !important;
+    color: #7c3aed !important;
     font-weight: 700 !important;
-}}
+}
 body [data-baseweb="popover"] li:hover,
-body [data-baseweb="popover"] [role="option"]:hover {{
-    background-color: rgba(192,132,252,0.14) !important;
-    color: {NEON_BLUE} !important;
-}}
-body [data-baseweb="popover"] > div > div > div:first-child > div {{
-    border: 1px solid {NEON_BLUE} !important;
+body [data-baseweb="popover"] [role="option"]:hover {
+    background-color: rgba(124,58,237,0.06) !important;
+    color: #7c3aed !important;
+}
+body [data-baseweb="popover"] > div > div > div:first-child > div {
+    border: 1px solid rgba(124,58,237,0.18) !important;
     border-radius: 10px !important;
-    box-shadow: 0 16px 56px rgba(0,0,0,0.85), 0 0 30px rgba(192,132,252,0.15) !important;
+    box-shadow: 0 12px 40px rgba(124,58,237,0.1) !important;
     overflow: hidden !important;
-}}
+}
 </style>
 """
 
@@ -1173,8 +1102,8 @@ def page_workload(df: pd.DataFrame):
     # ── Grouped Bar: All Engineers vs Ticket Count by Status ─────────────────
     st.markdown(section_hdr("Engineer Workload by Status", "📊"), unsafe_allow_html=True)
 
-    status_order  = ["Pending for Review", "Sent for Clarification", "Rejected", "Closed"]
-    status_colors = [NEON_ORANGE, NEON_BLUE, NEON_RED, NEON_GREEN]
+    status_order  = ["Pending for Review", "Sent for Clarification"]
+    status_colors = [NEON_ORANGE, NEON_BLUE]
 
     # All engineers sorted by total ticket count descending
     all_engs = (wdf.groupby("Assigned To Clean").size()
@@ -1228,15 +1157,15 @@ def page_workload(df: pd.DataFrame):
     summary = (wdf.groupby("Assigned To Clean")
                   .agg(
                       Total_Assigned=("Request ID", "count"),
-                      Open_Issues=("State", lambda x: (x.isin(["Pending for Review", "Sent for Clarification"])).sum()),
-                      Unique_Apps=("Application ID", lambda x: x[x != ""].nunique()),
+                      Pending_Review=("State", lambda x: (x == "Pending for Review").sum()),
+                      Sent_Clarification=("State", lambda x: (x == "Sent for Clarification").sum()),
                   )
                   .reset_index()
                   .rename(columns={
-                      "Assigned To Clean": "Engineer",
-                      "Total_Assigned":    "Total Assigned",
-                      "Open_Issues":       "Open Issues",
-                      "Unique_Apps":       "Unique Apps",
+                      "Assigned To Clean":  "Engineer",
+                      "Total_Assigned":     "Total Assigned",
+                      "Pending_Review":     "Pending for Review",
+                      "Sent_Clarification": "Sent for Clarification",
                   })
                   .sort_values("Total Assigned", ascending=False)
                   .reset_index(drop=True))
@@ -1252,14 +1181,13 @@ def page_workload(df: pd.DataFrame):
     summary["Workload"] = summary["Total Assigned"].apply(workload_label)
 
     st.dataframe(
-        summary[["Engineer", "Assigned Group", "Application ID", "Unique Apps",
-                 "Total Assigned", "Open Issues", "Workload"]],
+        summary[["Engineer", "Assigned Group", "Application ID",
+                 "Pending for Review", "Sent for Clarification", "Workload"]],
         use_container_width=True,
         hide_index=True,
         column_config={
-            "Total Assigned": st.column_config.NumberColumn(format="%d"),
-            "Open Issues":    st.column_config.NumberColumn(format="%d"),
-            "Unique Apps":    st.column_config.NumberColumn(format="%d"),
+            "Pending for Review":     st.column_config.NumberColumn(format="%d"),
+            "Sent for Clarification": st.column_config.NumberColumn(format="%d"),
         },
     )
 
@@ -1392,6 +1320,14 @@ def page_tracker(df: pd.DataFrame):
     with fc5: appid_f     = st.multiselect("Application ID", sorted(df["Application ID"].dropna().replace("", float("nan")).dropna().unique()), key="tr_ai")
     with fc6: group_f     = st.multiselect("Assigned Group",  sorted(df["Primary Group"].dropna().unique()), key="tr_gr")
 
+    # Engineer filter — scoped to selected groups (or all engineers if no group selected)
+    if group_f:
+        _eng_pool = sorted(df[df["Primary Group"].isin(group_f) & (df["Assigned To Clean"] != "")]["Assigned To Clean"].unique())
+    else:
+        _eng_pool = sorted(df[df["Assigned To Clean"] != ""]["Assigned To Clean"].unique())
+    fc7, fc8, _ = st.columns(3)
+    with fc7: engineer_f = st.multiselect("Engineer", _eng_pool, key="tr_eng")
+
     filtered = df.copy()
     if search:
         m = (filtered["Application Name"].str.contains(search, case=False, na=False) |
@@ -1410,6 +1346,7 @@ def page_tracker(df: pd.DataFrame):
     if portfolio_f: filtered = filtered[filtered["Portfolio Name"].isin(portfolio_f)]
     if appid_f:     filtered = filtered[filtered["Application ID"].isin(appid_f)]
     if group_f:     filtered = filtered[filtered["Primary Group"].isin(group_f)]
+    if engineer_f:  filtered = filtered[filtered["Assigned To Clean"].isin(engineer_f)]
 
     st.markdown(f'<div style="font-size:0.82rem;color:#6c7a9c;margin-bottom:8px">'
                 f'Showing <b style="color:#cdd6f4">{len(filtered):,}</b> of '
@@ -1418,7 +1355,7 @@ def page_tracker(df: pd.DataFrame):
     show_cols = [c for c in ["Request ID","Application ID","Portfolio Name","Application Name",
                              "Request Type","State","Assigned To","Assigned Group",
                              "App Exposure","Application Security Prioritization",
-                             "Signed-off By(ITSecurityChamp)","SLA Breached"] if c in filtered.columns]
+                             "Signed-off By(ITSecurityChamp)"] if c in filtered.columns]
     st.dataframe(filtered[show_cols], use_container_width=True, hide_index=True)
 
     ec1, ec2 = st.columns([1, 4])
@@ -2379,6 +2316,12 @@ def page_copilot(df: pd.DataFrame):
 
 def _generate_template_briefing(df: pd.DataFrame, today: datetime) -> str:
     """Build a complete professional briefing using only computed metrics."""
+    # ── Week period ───────────────────────────────────────────────────────────
+    week_start = today - timedelta(days=today.weekday())   # Monday
+    week_end   = week_start + timedelta(days=4)             # Friday
+    week_label = (f"{week_start.strftime('%d %b')} – {week_end.strftime('%d %b %Y')}")
+
+    # ── Global counts ─────────────────────────────────────────────────────────
     total      = len(df)
     pending    = int((df["State"] == "Pending for Review").sum())
     clarify    = int((df["State"] == "Sent for Clarification").sum())
@@ -2392,6 +2335,7 @@ def _generate_template_briefing(df: pd.DataFrame, today: datetime) -> str:
     closed_df  = df[df["State"] == "Closed"]
     avg_res    = closed_df["Days Open"].mean() if not closed_df.empty else 0.0
 
+    # ── Engineer load ─────────────────────────────────────────────────────────
     eng_load   = (df[df["Assigned To Clean"] != ""]
                   .groupby("Assigned To Clean").size()
                   .sort_values(ascending=False))
@@ -2417,7 +2361,46 @@ def _generate_template_briefing(df: pd.DataFrame, today: datetime) -> str:
     health = "CRITICAL" if breach_pct > 40 else ("AT RISK" if breach_pct > 20 else "HEALTHY")
     health_icon = "🔴" if health == "CRITICAL" else ("🟡" if health == "AT RISK" else "🟢")
 
-    # Build recommended actions
+    # ── Per-group stage breakdown ─────────────────────────────────────────────
+    CSAPPSEC_GRP = "ITIT-CSAppSec-Global-Support-L1"
+    ITSSDLC_GRP  = "ITIT-ITSSDLC-Global-Support-L1"
+    CSSDLC_GRP   = "ITIT-CSSDLC-Global-Support-L1"
+
+    _STATES = ["Pending for Review", "Sent for Clarification", "Closed", "Rejected"]
+    # Labels mapped to SNOW states
+    _STATE_LABELS = {
+        "Pending for Review":     "New / Pending Review",
+        "Sent for Clarification": "In Progress / Clarification",
+        "Closed":                 "Approved / Closed",
+        "Rejected":               "Cancelled / Rejected",
+    }
+
+    def _group_state_table(group_name: str) -> list:
+        """Return markdown table rows for a given group."""
+        gdf = df[df["Primary Group"] == group_name]
+        g_total = len(gdf)
+        rows = []
+        for s in _STATES:
+            cnt  = int((gdf["State"] == s).sum())
+            pct  = cnt / g_total * 100 if g_total else 0
+            unas = int(((gdf["State"] == s) & (gdf["Assigned To Clean"] == "")).sum())
+            rows.append(f"| {_STATE_LABELS[s]} | {cnt} | {pct:.0f}% | {unas} |")
+        rows.append(f"| **Total** | **{g_total}** | 100% | — |")
+        return rows
+
+    def _group_eng_summary(group_name: str) -> str:
+        gdf = df[(df["Primary Group"] == group_name) & (df["Assigned To Clean"] != "")]
+        eng_count = gdf["Assigned To Clean"].nunique()
+        if eng_count == 0:
+            return f"No assigned engineers in this group."
+        g_eng_load = gdf.groupby("Assigned To Clean").size().sort_values(ascending=False)
+        top = g_eng_load.index[0]
+        top_n = int(g_eng_load.iloc[0])
+        g_overloaded = int((g_eng_load > 10).sum())
+        return (f"{eng_count} active engineers. Heaviest load: **{top}** ({top_n} tickets)."
+                + (f" {g_overloaded} engineer(s) overloaded (>10 tickets)." if g_overloaded else ""))
+
+    # ── Recommended actions ────────────────────────────────────────────────────
     actions = []
     if crit_unasgn > 0:
         actions.append(f"Immediately assign the **{crit_unasgn} unassigned Critical ticket(s)** "
@@ -2434,9 +2417,11 @@ def _generate_template_briefing(df: pd.DataFrame, today: datetime) -> str:
     if not actions:
         actions.append("No urgent actions identified. Maintain current assignment cadence.")
 
+    # ── Build report ──────────────────────────────────────────────────────────
     lines = [
         f"# AppSec Weekly Intelligence Briefing",
-        f"**{today.strftime('%A, %d %B %Y')}** | Auto-generated from live ServiceNow data",
+        f"**Week of {week_label}** | Report Date: {today.strftime('%A, %d %B %Y')}",
+        f"Auto-generated from live ServiceNow data",
         f"",
         f"---",
         f"",
@@ -2451,14 +2436,48 @@ def _generate_template_briefing(df: pd.DataFrame, today: datetime) -> str:
         f"",
         f"---",
         f"",
-        f"## 2. Volume & Pipeline",
+        f"## 2. Stage Breakdown by Group",
+        f"",
+        f"### Stage 1 — CSAppSec ({CSAPPSEC_GRP})",
+        f"",
+        f"| Status | Count | % of Group | Unassigned |",
+        f"|--------|-------|------------|------------|",
+    ]
+    lines += _group_state_table(CSAPPSEC_GRP)
+    lines += [
+        f"",
+        f"_{_group_eng_summary(CSAPPSEC_GRP)}_",
+        f"",
+        f"### Stage 2 — ITSSDLC ({ITSSDLC_GRP})",
+        f"",
+        f"| Status | Count | % of Group | Unassigned |",
+        f"|--------|-------|------------|------------|",
+    ]
+    lines += _group_state_table(ITSSDLC_GRP)
+    lines += [
+        f"",
+        f"_{_group_eng_summary(ITSSDLC_GRP)}_",
+        f"",
+        f"### Stage 3 — CSSDLC ({CSSDLC_GRP})",
+        f"",
+        f"| Status | Count | % of Group | Unassigned |",
+        f"|--------|-------|------------|------------|",
+    ]
+    lines += _group_state_table(CSSDLC_GRP)
+    lines += [
+        f"",
+        f"_{_group_eng_summary(CSSDLC_GRP)}_",
+        f"",
+        f"---",
+        f"",
+        f"## 3. Overall Volume & Pipeline",
         f"",
         f"| Status | Count | % of Total |",
         f"|--------|-------|------------|",
-        f"| Pending for Review | {pending} | {pending/total*100:.0f}% |",
-        f"| Sent for Clarification | {clarify} | {clarify/total*100:.0f}% |",
-        f"| Closed | {closed} | {closed/total*100:.0f}% |",
-        f"| Rejected | {rejected} | {rejected/total*100:.0f}% |",
+        f"| New / Pending for Review | {pending} | {pending/total*100:.0f}% |",
+        f"| In Progress / Sent for Clarification | {clarify} | {clarify/total*100:.0f}% |",
+        f"| Approved / Closed | {closed} | {closed/total*100:.0f}% |",
+        f"| Cancelled / Rejected | {rejected} | {rejected/total*100:.0f}% |",
         f"| **Total** | **{total}** | 100% |",
         f"",
         f"**Top request types by volume:**",
@@ -2471,7 +2490,7 @@ def _generate_template_briefing(df: pd.DataFrame, today: datetime) -> str:
         f"",
         f"---",
         f"",
-        f"## 3. SLA Performance",
+        f"## 4. SLA Performance",
         f"",
         f"- **Overall breach rate:** {breach_pct:.1f}% — **{breached}** breached, "
         f"**{on_time}** on-time",
@@ -2499,7 +2518,7 @@ def _generate_template_briefing(df: pd.DataFrame, today: datetime) -> str:
         f"",
         f"---",
         f"",
-        f"## 4. Workload & Capacity",
+        f"## 5. Workload & Capacity",
         f"",
         f"- **Unassigned tickets:** {unassigned} total ({crit_unasgn} Critical, {high_unasgn} High)",
         f"- **Overloaded engineers (>10 tickets):** {overloaded}",
@@ -2509,7 +2528,7 @@ def _generate_template_briefing(df: pd.DataFrame, today: datetime) -> str:
         f"",
         f"---",
         f"",
-        f"## 5. Top Risks This Week",
+        f"## 6. Top Risks This Week",
         f"",
     ]
     risks = []
@@ -2531,7 +2550,7 @@ def _generate_template_briefing(df: pd.DataFrame, today: datetime) -> str:
         f"",
         f"---",
         f"",
-        f"## 6. Recommended Actions",
+        f"## 7. Recommended Actions",
         f"",
     ]
     for i, a in enumerate(actions, 1):
@@ -2633,35 +2652,24 @@ def _render_briefing_output(text: str, today: datetime):
     # Top accent bar + metadata ribbon
     st.markdown(f"""
     <div style='
-        background: linear-gradient(135deg, rgba(0,255,136,0.08) 0%, rgba(192,132,252,0.04) 100%);
-        border: 1px solid rgba(0,255,136,0.3);
+        background: linear-gradient(135deg, rgba(5,150,105,0.06) 0%, rgba(124,58,237,0.04) 100%);
+        border: 1px solid rgba(5,150,105,0.25);
         border-left: 4px solid {NEON_GREEN};
         border-radius: 0 14px 14px 0;
         padding: 14px 22px 10px;
         margin-bottom: 2px;
-        box-shadow: 0 0 40px rgba(0,255,136,0.07), inset 0 1px 0 rgba(0,255,136,0.08);
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
     '>
         <div style='display:flex;justify-content:space-between;align-items:center'>
             <div>
-                <div style='font-family:Orbitron,monospace;font-size:0.78rem;color:{NEON_GREEN};
-                            letter-spacing:0.08em;font-weight:700'>WEEKLY INTELLIGENCE BRIEFING</div>
-                <div style='font-size:0.72rem;color:#6c7a9c;margin-top:3px'>
+                <div style='font-family:Inter,sans-serif;font-size:0.78rem;color:{NEON_GREEN};
+                            letter-spacing:0.06em;font-weight:700;text-transform:uppercase'>
+                    Weekly Intelligence Briefing</div>
+                <div style='font-size:0.72rem;color:#64748b;margin-top:3px'>
                     {today.strftime('%A, %d %B %Y')} &nbsp;·&nbsp; Auto-generated from live ServiceNow data
                 </div>
             </div>
-            <div style='font-family:Orbitron,monospace;font-size:1.2rem;color:{NEON_GREEN};
-                        opacity:0.6'>&#9632;</div>
         </div>
-    </div>
-    <div style='
-        background: rgba(7,9,20,0.6);
-        border: 1px solid rgba(0,255,136,0.12);
-        border-top: none;
-        border-radius: 0 0 14px 14px;
-        padding: 24px 28px 20px;
-        margin-bottom: 16px;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-    '>
     </div>
     """, unsafe_allow_html=True)
 
