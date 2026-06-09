@@ -712,6 +712,11 @@ hr { border-color: var(--border) !important; margin: 20px 0 !important; }
     font-size: 0.82rem;
 }
 
+/* ── Copilot chatbot: push sticky chat input under the right column ── */
+section[data-testid="stBottom"] > div {
+    padding-left: 33.5% !important;
+}
+
 /* ── Global portal light override ── */
 body [data-baseweb="popover"],
 body [data-baseweb="popover"] *:not(svg):not(path) {
@@ -2108,207 +2113,221 @@ def _rule_based_answer(question: str, df: pd.DataFrame) -> str:
 # ─── Page: AI Copilot Chat ─────────────────────────────────────────────────────
 
 def page_copilot(df: pd.DataFrame):
-    api_key = _get_api_key()
-    mode    = "claude" if (ANTHROPIC_AVAILABLE and api_key) else "local"
-    mode_label = "Claude AI" if mode == "claude" else "Intelligence Engine"
+    api_key    = _get_api_key()
+    mode       = "claude" if (ANTHROPIC_AVAILABLE and api_key) else "local"
+    mode_label = "Claude AI" if mode == "claude" else "Rule Engine"
 
+    # ── Init session state ─────────────────────────────────────────────────────
+    if "copilot_messages" not in st.session_state:
+        st.session_state["copilot_messages"] = []
+
+    # Consume pending suggestion BEFORE layout (button click triggers rerun)
+    pending_q  = st.session_state.pop("_copilot_pending", None)
+
+    # ── Chat input — sticky bottom; called early to capture value this frame ──
+    user_input = st.chat_input("Ask anything about your AppSec ticket pipeline...")
+    question   = pending_q or user_input
+
+    # ── Page header ────────────────────────────────────────────────────────────
     st.markdown(page_banner(
-        "AI Copilot",
-        f"Ask anything about your AppSec ticket pipeline · {mode_label} · Live data",
+        "AppSec Intelligence Chatbot",
+        f"Live data · {mode_label} · Ask anything about your ticket pipeline",
         NEON_PURPLE), unsafe_allow_html=True)
 
-    # ── Live context stats bar ─────────────────────────────────────────────────
+    # ── Live KPI bar ───────────────────────────────────────────────────────────
     total      = len(df)
     breached   = int(df["SLA Breached"].sum())
     unassigned = int((df["Assigned To Clean"] == "").sum())
     eng_count  = df[df["Assigned To Clean"] != ""]["Assigned To Clean"].nunique()
     breach_pct = breached / total * 100 if total else 0
+    open_t     = int((df["State"].isin(["Pending for Review", "Sent for Clarification"])).sum())
 
-    st.markdown(f"""
-    <div style='display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap'>
-        <div style='flex:1;min-width:110px;background:rgba(180,79,255,0.07);
-            border:1px solid rgba(180,79,255,0.25);border-radius:10px;padding:10px 14px'>
-            <div style='font-family:Orbitron,monospace;font-size:1.2rem;font-weight:700;
-                color:{NEON_PURPLE}'>{total:,}</div>
-            <div style='font-size:0.65rem;color:#6c7a9c;text-transform:uppercase;
-                letter-spacing:0.1em'>Total Tickets</div>
-        </div>
-        <div style='flex:1;min-width:110px;background:rgba(255,75,110,0.07);
-            border:1px solid rgba(255,75,110,0.25);border-radius:10px;padding:10px 14px'>
-            <div style='font-family:Orbitron,monospace;font-size:1.2rem;font-weight:700;
-                color:{NEON_RED}'>{breach_pct:.1f}%</div>
-            <div style='font-size:0.65rem;color:#6c7a9c;text-transform:uppercase;
-                letter-spacing:0.1em'>SLA Breach Rate</div>
-        </div>
-        <div style='flex:1;min-width:110px;background:rgba(255,166,77,0.07);
-            border:1px solid rgba(255,166,77,0.25);border-radius:10px;padding:10px 14px'>
-            <div style='font-family:Orbitron,monospace;font-size:1.2rem;font-weight:700;
-                color:{NEON_ORANGE}'>{unassigned}</div>
-            <div style='font-size:0.65rem;color:#6c7a9c;text-transform:uppercase;
-                letter-spacing:0.1em'>Unassigned</div>
-        </div>
-        <div style='flex:1;min-width:110px;background:rgba(192,132,252,0.07);
-            border:1px solid rgba(192,132,252,0.2);border-radius:10px;padding:10px 14px'>
-            <div style='font-family:Orbitron,monospace;font-size:1.2rem;font-weight:700;
-                color:{NEON_BLUE}'>{eng_count}</div>
-            <div style='font-size:0.65rem;color:#6c7a9c;text-transform:uppercase;
-                letter-spacing:0.1em'>Active Engineers</div>
-        </div>
-        <div style='flex:1;min-width:140px;background:rgba(0,255,136,0.04);
-            border:1px solid rgba(0,255,136,0.15);border-radius:10px;
-            padding:10px 14px;display:flex;flex-direction:column;justify-content:center'>
-            <div style='font-size:0.65rem;color:#b44fff;text-transform:uppercase;
-                letter-spacing:0.1em;margin-bottom:2px'>Mode</div>
-            <div style='font-size:0.78rem;color:#cdd6f4;font-weight:600'>{mode_label}</div>
-            <div style='font-size:0.62rem;color:#4a5568;margin-top:1px'>
-                {'Claude Sonnet 4.6' if mode == 'claude' else 'No API key needed'}</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    render_kpis([
+        (f"{total:,}",         "Total Tickets",    NEON_BLUE,   "📋", ""),
+        (f"{open_t:,}",        "Open Tickets",     NEON_ORANGE, "🕐", "pending + clarification"),
+        (f"{unassigned:,}",    "Unassigned",       NEON_RED,    "⚠️", "need assignment"),
+        (f"{breach_pct:.1f}%", "SLA Breach Rate",  NEON_RED,    "🚨", f"{breached} tickets"),
+        (f"{eng_count:,}",     "Active Engineers", NEON_PURPLE, "👷", ""),
+    ])
+    st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
 
-    # ── Optional: Claude API key setup ────────────────────────────────────────
-    if mode == "local":
-        with st.expander("Upgrade to Claude AI (optional — needs API key)", expanded=False):
-            st.markdown(
-                '<div class="info-panel" style="margin-bottom:10px">The copilot works fully '
-                'without a key. Add an Anthropic API key to unlock richer conversational '
-                'answers with full context awareness.</div>', unsafe_allow_html=True)
-            with st.form("api_key_form", clear_on_submit=False):
-                key_input = st.text_input("Anthropic API Key", type="password",
-                                          placeholder="sk-ant-...")
-                if st.form_submit_button("Save Key"):
-                    if key_input.startswith("sk-"):
-                        st.session_state["anthropic_api_key"] = key_input
-                        st.success("Key saved. Reload page to activate Claude mode.")
-                        st.rerun()
-                    else:
-                        st.error("Key must start with 'sk-ant-'")
+    # ── Two-column layout: LEFT = suggestions/settings │ RIGHT = chat ─────────
+    left_col, right_col = st.columns([1, 2])
 
-    # ── Init chat history ──────────────────────────────────────────────────────
-    if "copilot_messages" not in st.session_state:
-        st.session_state["copilot_messages"] = []
-
-    if mode == "claude" and "copilot_context" not in st.session_state:
-        st.session_state["copilot_context"] = _build_data_context(df)
-
-    # ── Capture ALL question sources FIRST (before any rendering decisions) ───
-    # st.chat_input is sticky at the bottom regardless of where it's called
-    user_input = st.chat_input("Ask about your AppSec tickets — workload, SLA, assignments...")
-    # Suggestion buttons set _copilot_pending; consume it here on the rerun they trigger
-    pending_q = st.session_state.pop("_copilot_pending", None)
-    question = pending_q or user_input  # whichever arrived this frame
-
-    # ── Welcome state — shown ONLY when chat is truly empty AND no question ────
-    if not st.session_state["copilot_messages"] and not question:
-        st.markdown(f"""
-        <div style='text-align:center;padding:20px 0 10px'>
-            <div style='font-size:2.4rem;margin-bottom:8px'>🛡</div>
-            <div style='font-family:Orbitron,monospace;font-size:1rem;font-weight:700;
-                background:linear-gradient(135deg,{NEON_PURPLE},{NEON_BLUE});
-                -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-                background-clip:text;letter-spacing:0.06em'>AppSec Intelligence Copilot</div>
-            <div style='color:#6c7a9c;font-size:0.85rem;margin-top:6px'>
-                Ask anything about your live ServiceNow ticket data
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown(section_hdr("Suggested Questions — click to ask", ""), unsafe_allow_html=True)
+    # ─────────────────────────── LEFT PANEL ───────────────────────────────────
+    with left_col:
+        st.markdown(section_hdr("Suggested Questions", "💡"), unsafe_allow_html=True)
 
         suggestions = [
-            ("👷", "Workload",      "Who has the lightest workload right now?"),
-            ("🚨", "SLA Breach",    "What is our current SLA breach situation?"),
-            ("📭", "Unassigned",    "Summarize all unassigned tickets and suggest a triage plan."),
-            ("📊", "Request Types", "Which request type has the worst SLA compliance?"),
-            ("🔴", "Overloaded",    "Which engineer is most overloaded?"),
-            ("📋", "Overview",      "Give me an overview of the current dashboard."),
+            ("👷", "Who has the lightest workload right now?"),
+            ("🚨", "What is our current SLA breach situation?"),
+            ("📭", "Summarize all unassigned tickets and suggest a triage plan."),
+            ("📊", "Which request type has the worst SLA compliance?"),
+            ("🔴", "Which engineer is most overloaded?"),
+            ("📋", "Give me an overview of the current dashboard."),
+            ("🎯", "List all unassigned critical tickets."),
+            ("📈", "What are the top insights from the current pipeline?"),
         ]
 
-        col1, col2, col3 = st.columns(3)
-        cols = [col1, col2, col3]
-        for i, (icon, label, sug_q) in enumerate(suggestions):
-            with cols[i % 3]:
-                st.markdown(f"""
-                <div style='background:rgba(180,79,255,0.05);
-                    border:1px solid rgba(180,79,255,0.2);
-                    border-top:2px solid {NEON_PURPLE};
-                    border-radius:0 0 10px 10px;
-                    padding:4px 12px 6px;margin-bottom:2px'>
-                    <span style='font-size:0.65rem;text-transform:uppercase;
-                        letter-spacing:0.1em;color:{NEON_PURPLE};font-weight:600'>
-                        {icon} {label}</span>
-                </div>
-                """, unsafe_allow_html=True)
-                # Set pending and let the button-triggered rerun handle response generation
-                if st.button(sug_q, key=f"sug_{i}", use_container_width=True):
-                    st.session_state["_copilot_pending"] = sug_q
+        for i, (icon, sug_q) in enumerate(suggestions):
+            if st.button(f"{icon}  {sug_q}", key=f"sug_{i}", use_container_width=True):
+                st.session_state["_copilot_pending"] = sug_q
 
-        st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
 
-    else:
-        # ── Render existing chat messages ──────────────────────────────────────
-        for msg in st.session_state["copilot_messages"]:
-            with st.chat_message(msg["role"],
-                                 avatar="🛡" if msg["role"] == "assistant" else "👤"):
-                st.markdown(msg["content"])
+        # Mode badge
+        mode_color = NEON_PURPLE if mode == "claude" else NEON_BLUE
+        st.markdown(
+            f"<div style='background:rgba(124,58,237,0.05);border:1px solid rgba(124,58,237,0.18);"
+            f"border-radius:10px;padding:12px 14px'>"
+            f"<div style='font-size:0.6rem;color:#94a3b8;text-transform:uppercase;"
+            f"letter-spacing:0.14em;margin-bottom:4px'>Active Mode</div>"
+            f"<div style='font-size:0.88rem;font-weight:700;color:{mode_color}'>{mode_label}</div>"
+            f"<div style='font-size:0.7rem;color:#64748b;margin-top:3px'>"
+            f"{'Claude Sonnet 4.6 — AI responses' if mode == 'claude' else 'Rule engine — no key needed'}"
+            f"</div></div>",
+            unsafe_allow_html=True)
 
-        # ── Generate response for the incoming question ────────────────────────
-        if question:
-            # Show user message
-            with st.chat_message("user", avatar="👤"):
-                st.markdown(question)
-            st.session_state["copilot_messages"].append(
-                {"role": "user", "content": question})
-
-            # Generate and show assistant response
-            with st.chat_message("assistant", avatar="🛡"):
-                placeholder = st.empty()
-
-                if mode == "claude":
-                    system_prompt = (
-                        "You are the AppSec Operations Intelligence Copilot for a cybersecurity team. "
-                        "Be concise, direct, and always ground your answers in the live dashboard data "
-                        "below. Format in clean markdown with bullet points and bold key figures. "
-                        "Never fabricate data not in the context.\n\n"
-                        + st.session_state["copilot_context"]
-                    )
-                    full_response = ""
-                    try:
-                        client = _anthropic.Anthropic(api_key=api_key)
-                        api_messages = [{"role": m["role"], "content": m["content"]}
-                                        for m in st.session_state["copilot_messages"]]
-                        with client.messages.stream(
-                            model="claude-sonnet-4-6", max_tokens=1024,
-                            system=system_prompt, messages=api_messages,
-                        ) as stream:
-                            for chunk in stream.text_stream:
-                                full_response += chunk
-                                placeholder.markdown(full_response + "▌")
-                        placeholder.markdown(full_response)
-                        st.session_state["copilot_messages"].append(
-                            {"role": "assistant", "content": full_response})
-                    except Exception as e:
-                        err = str(e)
-                        if "authentication" in err.lower() or "api_key" in err.lower():
-                            placeholder.error("Invalid API key — falling back to local mode.")
-                            st.session_state.pop("anthropic_api_key", None)
-                            st.session_state.pop("copilot_context", None)
+        # API key expander (only in local mode)
+        if mode == "local":
+            st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+            with st.expander("Add Claude API Key (optional)", expanded=False):
+                st.markdown(
+                    "<div style='font-size:0.8rem;color:#64748b;margin-bottom:8px'>"
+                    "Add an Anthropic API key to get richer, context-aware AI answers.</div>",
+                    unsafe_allow_html=True)
+                with st.form("api_key_form", clear_on_submit=False):
+                    key_input = st.text_input("API Key", type="password", placeholder="sk-ant-...")
+                    if st.form_submit_button("Save Key"):
+                        if key_input.startswith("sk-"):
+                            st.session_state["anthropic_api_key"] = key_input
+                            st.success("Key saved — reload to activate Claude mode.")
+                            st.rerun()
                         else:
-                            placeholder.error(f"Claude API error: {err}")
-                else:
-                    answer = _rule_based_answer(question, df)
-                    placeholder.markdown(answer)
-                    st.session_state["copilot_messages"].append(
-                        {"role": "assistant", "content": answer})
+                            st.error("Key must start with 'sk-'")
 
-        # ── Clear chat ─────────────────────────────────────────────────────────
+    # ─────────────────────────── RIGHT PANEL (chat) ───────────────────────────
+    with right_col:
+        # Chat panel header bar
+        st.markdown(
+            "<div style='background:linear-gradient(135deg,rgba(124,58,237,0.07),"
+            "rgba(124,58,237,0.02));border:1px solid rgba(124,58,237,0.18);"
+            "border-bottom:none;border-radius:14px 14px 0 0;padding:12px 18px;"
+            "display:flex;align-items:center;gap:10px'>"
+            "<span style='font-size:1.3rem'>🛡</span>"
+            "<div><div style='font-size:0.92rem;font-weight:700;color:#1e293b'>"
+            "AppSec Chatbot</div>"
+            "<div style='font-size:0.68rem;color:#94a3b8'>Powered by live dashboard data</div></div>"
+            "<div style='margin-left:auto;display:flex;align-items:center;gap:5px'>"
+            "<div style='width:7px;height:7px;background:#059669;border-radius:50%'></div>"
+            "<span style='font-size:0.7rem;color:#059669;font-weight:600'>Online</span>"
+            "</div></div>",
+            unsafe_allow_html=True)
+
+        # Chat body container
+        chat_box = st.container()
+        with chat_box:
+            if not st.session_state["copilot_messages"] and not question:
+                # ── Welcome / empty state ──────────────────────────────────────
+                st.markdown(
+                    "<div style='background:#FFFFFF;border:1px solid rgba(124,58,237,0.12);"
+                    "border-top:none;border-radius:0 0 14px 14px;padding:60px 24px;"
+                    "text-align:center'>"
+                    "<div style='font-size:3rem;margin-bottom:14px'>🛡</div>"
+                    "<div style='font-size:1rem;font-weight:700;color:#7c3aed;margin-bottom:8px'>"
+                    "AppSec Intelligence Chatbot</div>"
+                    "<div style='font-size:0.85rem;color:#94a3b8;line-height:1.7'>"
+                    "Ask anything about your live ServiceNow ticket data.<br>"
+                    "Use the suggested questions on the left to get started,<br>"
+                    "or type your question in the chat input below.</div>"
+                    "</div>",
+                    unsafe_allow_html=True)
+            else:
+                # ── Render chat history ────────────────────────────────────────
+                st.markdown(
+                    "<div style='background:#FFFFFF;border:1px solid rgba(124,58,237,0.12);"
+                    "border-top:none;border-radius:0 0 14px 14px;padding:16px 12px 8px'>",
+                    unsafe_allow_html=True)
+
+                for msg in st.session_state["copilot_messages"]:
+                    with st.chat_message(msg["role"],
+                                         avatar="🛡" if msg["role"] == "assistant" else "👤"):
+                        st.markdown(msg["content"])
+
+                # ── Handle incoming question ───────────────────────────────────
+                if question:
+                    with st.chat_message("user", avatar="👤"):
+                        st.markdown(question)
+                    st.session_state["copilot_messages"].append(
+                        {"role": "user", "content": question})
+
+                    # Build fresh context from live data on every question
+                    context = _build_data_context(df)
+
+                    SYSTEM_PROMPT = (
+                        "You are the AppSec Ticket Intelligence Chatbot for a ServiceNow "
+                        "AppSec workload dashboard.\n\n"
+                        "- Only answer from the live dashboard data provided below.\n"
+                        "- Be concise, factual, and action-oriented.\n"
+                        "- Format responses with clean markdown: headings, bullet lists, "
+                        "and bold key numbers.\n"
+                        "- If the answer cannot be determined from the provided data, say:\n"
+                        '  "I cannot answer that from the current dashboard data."\n'
+                        "- Do not invent or fabricate any facts, numbers, names, "
+                        "priorities, or tickets.\n"
+                        "- Prefer short summaries with top insights first.\n"
+                        "- When relevant, include recommendations such as:\n"
+                        "  - assign unassigned critical tickets\n"
+                        "  - reduce overloaded engineers\n"
+                        "  - address highest SLA breach request types\n"
+                        "  - focus on tickets with highest priority and oldest open time\n\n"
+                        "Live dashboard context:\n"
+                        + context
+                    )
+
+                    with st.chat_message("assistant", avatar="🛡"):
+                        placeholder = st.empty()
+
+                        if mode == "claude":
+                            full_response = ""
+                            try:
+                                client = _anthropic.Anthropic(api_key=api_key)
+                                api_messages = [
+                                    {"role": m["role"], "content": m["content"]}
+                                    for m in st.session_state["copilot_messages"]
+                                ]
+                                with client.messages.stream(
+                                    model="claude-sonnet-4-6", max_tokens=1024,
+                                    system=SYSTEM_PROMPT, messages=api_messages,
+                                ) as stream:
+                                    for chunk in stream.text_stream:
+                                        full_response += chunk
+                                        placeholder.markdown(full_response + "▌")
+                                placeholder.markdown(full_response)
+                                st.session_state["copilot_messages"].append(
+                                    {"role": "assistant", "content": full_response})
+                            except Exception as e:
+                                err = str(e)
+                                if "authentication" in err.lower() or "api_key" in err.lower():
+                                    placeholder.error("Invalid API key — switching to rule engine.")
+                                    st.session_state.pop("anthropic_api_key", None)
+                                else:
+                                    placeholder.error(f"Claude API error: {err}")
+                        else:
+                            answer = _rule_based_answer(question, df)
+                            placeholder.markdown(answer)
+                            st.session_state["copilot_messages"].append(
+                                {"role": "assistant", "content": answer})
+
+                st.markdown("</div>", unsafe_allow_html=True)
+
+        # Clear chat button
         if st.session_state["copilot_messages"]:
             st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-            col_clr, _ = st.columns([1, 5])
+            col_clr, _ = st.columns([1, 4])
             with col_clr:
                 if st.button("Clear Chat", key="copilot_clear", use_container_width=True):
                     st.session_state["copilot_messages"] = []
-                    st.session_state.pop("copilot_context", None)
                     st.rerun()
 
 
