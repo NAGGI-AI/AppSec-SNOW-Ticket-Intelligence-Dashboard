@@ -712,11 +712,6 @@ hr { border-color: var(--border) !important; margin: 20px 0 !important; }
     font-size: 0.82rem;
 }
 
-/* ── Copilot chatbot: push sticky chat input under the right column ── */
-section[data-testid="stBottom"] > div {
-    padding-left: 33.5% !important;
-}
-
 /* ── Global portal light override ── */
 body [data-baseweb="popover"],
 body [data-baseweb="popover"] *:not(svg):not(path) {
@@ -2952,6 +2947,330 @@ def _snow_do_sync(state_changes: pd.DataFrame, assign_changes: pd.DataFrame,
 
 # ─── Sidebar ──────────────────────────────────────────────────────────────────
 
+def render_floating_chatbot(df: pd.DataFrame):
+    """Inject a fixed-position floating chatbot popup at the bottom-right corner.
+    Purely JS/CSS — no Streamlit widgets — so it persists across page navigation
+    and Streamlit rerenders without resetting.  Chat history is kept in sessionStorage.
+    """
+    if df is None or df.empty:
+        return
+
+    # ── Compute live metrics to inject as JS constants ─────────────────────────
+    total      = len(df)
+    pending    = int((df["State"] == "Pending for Review").sum())
+    clarify    = int((df["State"] == "Sent for Clarification").sum())
+    closed     = int((df["State"] == "Closed").sum())
+    rejected   = int((df["State"] == "Rejected").sum())
+    unassigned = int((df["Assigned To Clean"] == "").sum())
+    breached   = int(df["SLA Breached"].sum())
+    breach_pct = round(breached / total * 100 if total else 0, 1)
+    eng_count  = int(df[df["Assigned To Clean"] != ""]["Assigned To Clean"].nunique())
+
+    eng_load   = (df[df["Assigned To Clean"] != ""]
+                  .groupby("Assigned To Clean").size().sort_values(ascending=False))
+    top_eng    = eng_load.index[0].replace('"', "'")  if not eng_load.empty else "N/A"
+    top_cnt    = int(eng_load.iloc[0])                if not eng_load.empty else 0
+    light_eng  = eng_load.index[-1].replace('"', "'") if not eng_load.empty else "N/A"
+    light_cnt  = int(eng_load.iloc[-1])               if not eng_load.empty else 0
+    overloaded = int((eng_load > 10).sum())
+
+    pvc         = df["Priority"].value_counts()
+    crit_count  = int(pvc.get("Critical", 0))
+    high_count  = int(pvc.get("High", 0))
+    crit_unasgn = int(((df["Assigned To Clean"] == "") & (df["Priority"] == "Critical")).sum())
+
+    rt_counts  = df["Request Type"].replace("", "Unknown").value_counts().head(5)
+    rt_json    = json.dumps({k: int(v) for k, v in rt_counts.items()})
+
+    btype      = df[df["SLA Breached"]]["Request Type"].replace("", "Unknown").value_counts()
+    worst_type = str(btype.index[0]).replace('"', "'") if not btype.empty else "N/A"
+
+    # ── Inject widget HTML + CSS + JS via st.markdown ─────────────────────────
+    # position:fixed is relative to the viewport (not the iframe) because
+    # st.markdown renders directly into the page DOM, not an iframe.
+    st.markdown(f"""
+<style>
+#_acb_wrap {{
+    position:fixed;bottom:28px;right:28px;z-index:999999;
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+    display:flex;flex-direction:column;align-items:flex-end;
+}}
+#_acb_fab {{
+    width:56px;height:56px;border-radius:50%;
+    background:linear-gradient(135deg,#7c3aed,#6d28d9);
+    border:none;cursor:pointer;
+    box-shadow:0 4px 22px rgba(124,58,237,0.45);
+    font-size:1.5rem;color:#fff;
+    display:flex;align-items:center;justify-content:center;
+    transition:transform .2s,box-shadow .2s;
+    flex-shrink:0;
+}}
+#_acb_fab:hover{{transform:scale(1.1);box-shadow:0 6px 28px rgba(124,58,237,0.55);}}
+#_acb_panel {{
+    width:360px;height:520px;
+    background:#fff;border-radius:18px;
+    box-shadow:0 12px 48px rgba(0,0,0,0.18),0 2px 8px rgba(124,58,237,0.12);
+    display:none;flex-direction:column;overflow:hidden;
+    margin-bottom:14px;
+    border:1px solid rgba(124,58,237,0.15);
+    animation:_acb_up .22s ease;
+}}
+@keyframes _acb_up{{from{{opacity:0;transform:translateY(14px) scale(.97)}}to{{opacity:1;transform:none}}}}
+#_acb_hdr {{
+    background:linear-gradient(135deg,#7c3aed,#6d28d9);
+    padding:13px 15px;display:flex;align-items:center;gap:10px;flex-shrink:0;
+}}
+#_acb_hdr_r {{margin-left:auto;display:flex;align-items:center;gap:5px;}}
+#_acb_close {{
+    background:rgba(255,255,255,.18);border:none;color:#fff;cursor:pointer;
+    border-radius:50%;width:26px;height:26px;font-size:.82rem;
+    display:flex;align-items:center;justify-content:center;margin-left:5px;
+}}
+#_acb_close:hover{{background:rgba(255,255,255,.28);}}
+#_acb_msgs {{
+    flex:1;overflow-y:auto;padding:13px 12px 8px;
+    display:flex;flex-direction:column;gap:8px;
+    scrollbar-width:thin;scrollbar-color:rgba(124,58,237,.2) transparent;
+}}
+#_acb_msgs::-webkit-scrollbar{{width:4px;}}
+#_acb_msgs::-webkit-scrollbar-thumb{{background:rgba(124,58,237,.2);border-radius:2px;}}
+._acb_bot {{
+    background:#f1f0ff;border:1px solid rgba(124,58,237,.1);
+    border-radius:14px 14px 14px 3px;
+    padding:10px 13px;font-size:.81rem;color:#1e293b;
+    line-height:1.55;max-width:95%;
+}}
+._acb_user {{
+    background:linear-gradient(135deg,#7c3aed,#6d28d9);
+    border-radius:14px 14px 3px 14px;
+    padding:10px 13px;font-size:.81rem;color:#fff;
+    line-height:1.55;max-width:85%;align-self:flex-end;
+}}
+._acb_chip {{
+    background:rgba(124,58,237,.07);border:1px solid rgba(124,58,237,.22);
+    border-radius:20px;padding:6px 12px;font-size:.74rem;color:#7c3aed;
+    cursor:pointer;transition:all .15s;white-space:nowrap;font-weight:500;
+    display:inline-block;margin:3px 3px 0 0;
+}}
+._acb_chip:hover{{background:rgba(124,58,237,.14);transform:translateY(-1px);}}
+._acb_typing{{display:flex;gap:4px;align-items:center;padding:10px 13px;
+    background:#f1f0ff;border-radius:14px 14px 14px 3px;width:fit-content;
+    border:1px solid rgba(124,58,237,.1);}}
+._acb_typing span{{width:7px;height:7px;background:#7c3aed;border-radius:50%;
+    animation:_acb_blink 1.2s infinite;}}
+._acb_typing span:nth-child(2){{animation-delay:.2s;}}
+._acb_typing span:nth-child(3){{animation-delay:.4s;}}
+@keyframes _acb_blink{{0%,80%,100%{{opacity:.15;transform:scale(.85)}}40%{{opacity:1;transform:scale(1)}}}}
+#_acb_foot {{
+    padding:10px 11px;border-top:1px solid rgba(124,58,237,.1);
+    display:flex;gap:7px;align-items:center;background:#f7f8fc;flex-shrink:0;
+}}
+#_acb_inp {{
+    flex:1;border:1.5px solid rgba(124,58,237,.22);border-radius:22px;
+    padding:8px 15px;font-size:.81rem;outline:none;background:#fff;
+    color:#1e293b;font-family:inherit;transition:border-color .2s;
+}}
+#_acb_inp::placeholder{{color:#94a3b8;font-style:italic;}}
+#_acb_inp:focus{{border-color:#7c3aed;box-shadow:0 0 0 3px rgba(124,58,237,.1);}}
+#_acb_send {{
+    width:37px;height:37px;background:linear-gradient(135deg,#7c3aed,#6d28d9);
+    border:none;border-radius:50%;color:#fff;cursor:pointer;
+    font-size:.95rem;display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;transition:transform .15s;
+}}
+#_acb_send:hover{{transform:scale(1.08);}}
+</style>
+
+<div id="_acb_wrap">
+  <div id="_acb_panel">
+    <div id="_acb_hdr">
+      <span style="font-size:1.25rem">🛡</span>
+      <div>
+        <div style="font-size:.88rem;font-weight:700;color:#fff">AppSec Chatbot</div>
+        <div style="font-size:.65rem;color:rgba(255,255,255,.65);margin-top:1px">Live dashboard data</div>
+      </div>
+      <div id="_acb_hdr_r">
+        <div style="width:8px;height:8px;background:#10b981;border-radius:50%;box-shadow:0 0 6px #10b981"></div>
+        <span style="font-size:.68rem;color:rgba(255,255,255,.8)">Online</span>
+        <button id="_acb_close" onclick="_acbToggle()">✕</button>
+      </div>
+    </div>
+    <div id="_acb_msgs"></div>
+    <div id="_acb_foot">
+      <input id="_acb_inp" type="text" placeholder="Ask about your tickets..."
+             onkeydown="if(event.key==='Enter')_acbSend()">
+      <button id="_acb_send" onclick="_acbSend()">&#10148;</button>
+    </div>
+  </div>
+  <button id="_acb_fab" onclick="_acbToggle()" title="AppSec Chatbot">💬</button>
+</div>
+
+<script>
+(function(){{
+  // Remove any stale widget from previous Streamlit render
+  var old=document.getElementById("_acb_wrap");
+  if(old && old._acb_init){{ old._acb_init({{
+    total:{total},pending:{pending},clarify:{clarify},closed:{closed},
+    rejected:{rejected},unassigned:{unassigned},breached:{breached},
+    breach_pct:{breach_pct},eng_count:{eng_count},
+    top_eng:"{top_eng}",top_cnt:{top_cnt},
+    light_eng:"{light_eng}",light_cnt:{light_cnt},
+    overloaded:{overloaded},crit_count:{crit_count},high_count:{high_count},
+    crit_unasgn:{crit_unasgn},worst_type:"{worst_type}",rt:{rt_json}
+  }}); return; }}
+
+  var D={{
+    total:{total},pending:{pending},clarify:{clarify},closed:{closed},
+    rejected:{rejected},unassigned:{unassigned},breached:{breached},
+    breach_pct:{breach_pct},eng_count:{eng_count},
+    top_eng:"{top_eng}",top_cnt:{top_cnt},
+    light_eng:"{light_eng}",light_cnt:{light_cnt},
+    overloaded:{overloaded},crit_count:{crit_count},high_count:{high_count},
+    crit_unasgn:{crit_unasgn},worst_type:"{worst_type}",rt:{rt_json}
+  }};
+
+  var SK_HIST="acb_hist_v1", SK_OPEN="acb_open";
+  var isOpen=false, welcomed=false;
+
+  function savH(h){{try{{sessionStorage.setItem(SK_HIST,JSON.stringify(h));}}catch(e){{}}}}
+  function lodH(){{try{{return JSON.parse(sessionStorage.getItem(SK_HIST)||"[]");}}catch(e){{return[];}}}}
+
+  function msgs(){{return document.getElementById("_acb_msgs");}}
+  function inp() {{return document.getElementById("_acb_inp");}}
+
+  function bubble(html, role, save){{
+    var d=document.createElement("div");
+    d.className=role==="user"?"_acb_user":"_acb_bot";
+    d.innerHTML=html;
+    msgs().appendChild(d);
+    msgs().scrollTop=99999;
+    if(save){{var h=lodH();h.push({{r:role,h:html}});savH(h);}}
+  }}
+
+  function typing(){{
+    var t=document.createElement("div");
+    t.id="_acb_typ";t.className="_acb_typing";
+    t.innerHTML="<span></span><span></span><span></span>";
+    msgs().appendChild(t);msgs().scrollTop=99999;
+  }}
+  function rmTyping(){{var t=document.getElementById("_acb_typ");if(t)t.remove();}}
+
+  function chips(){{
+    var qs=[
+      ["👷","Lightest workload"],["🔴","Most overloaded engineer"],
+      ["📭","Unassigned tickets"],["🎯","Critical ticket status"],
+      ["📋","Dashboard overview"],["📊","Request type breakdown"]
+    ];
+    var w=document.createElement("div");
+    var lbl=document.createElement("div");
+    lbl.style.cssText="font-size:.66rem;color:#94a3b8;margin-bottom:5px;font-weight:600;text-transform:uppercase;letter-spacing:.1em";
+    lbl.textContent="Quick questions";
+    w.appendChild(lbl);
+    qs.forEach(function(q){{
+      var c=document.createElement("span");
+      c.className="_acb_chip";c.textContent=q[0]+" "+q[1];
+      c.onclick=(function(label){{return function(){{handleQ(label);}};}})(q[1]);
+      w.appendChild(c);
+    }});
+    msgs().appendChild(w);msgs().scrollTop=99999;
+  }}
+
+  function answer(q){{
+    var ql=q.toLowerCase();
+    if(/overload|heaviest|busiest|most ticket/.test(ql))
+      return "🔴 <b>Most Overloaded Engineer</b><br><b>"+D.top_eng+"</b> — <b>"+D.top_cnt+" tickets</b><br>"+
+             "⚠️ <b>"+D.overloaded+"</b> engineer(s) overloaded (&gt;10 tickets).<br><br>"+
+             "💡 Redistribute tickets to engineers with lighter load.";
+    if(/light|least|fewest|available/.test(ql))
+      return "👷 <b>Lightest Workload</b><br><b>"+D.light_eng+"</b> — <b>"+D.light_cnt+"</b> ticket(s).<br><br>"+
+             "💡 Ideal candidate for new critical ticket assignments.";
+    if(/unassign|triage|no engineer|without/.test(ql))
+      return "📭 <b>Unassigned Tickets</b><br>Total unassigned: <b>"+D.unassigned+"</b><br>"+
+             "Critical unassigned: <b>"+D.crit_unasgn+"</b> 🚨<br><br>"+
+             "💡 Assign the <b>"+D.crit_unasgn+" critical</b> unassigned tickets immediately — SLA is only <b>7 days</b>.";
+    if(/sla|breach|compliance|overdue/.test(ql)){{
+      var s=D.breach_pct>40?"🔴 CRITICAL":D.breach_pct>20?"🟡 AT RISK":"🟢 HEALTHY";
+      return "🚨 <b>SLA Status: "+s+"</b><br>Breach rate: <b>"+D.breach_pct+"%</b> ("+D.breached+" tickets)<br>"+
+             "Worst type: <b>"+D.worst_type+"</b><br><br>"+
+             "Thresholds: Critical=7d · High=14d · Medium=21d · Low=30d";
+    }}
+    if(/overview|summary|status|dashboard|pipeline/.test(ql))
+      return "📋 <b>Dashboard Overview</b><br>"+
+             "📊 Total: <b>"+D.total.toLocaleString()+"</b><br>"+
+             "🕐 Pending Review: <b>"+D.pending+"</b><br>"+
+             "💬 Sent for Clarification: <b>"+D.clarify+"</b><br>"+
+             "✅ Closed: <b>"+D.closed+"</b><br>"+
+             "❌ Rejected: <b>"+D.rejected+"</b><br>"+
+             "⚠️ Unassigned: <b>"+D.unassigned+"</b><br>"+
+             "👷 Active Engineers: <b>"+D.eng_count+"</b>";
+    if(/critical|urgent|high.?priority/.test(ql))
+      return "🎯 <b>Critical Ticket Status</b><br>"+
+             "Total Critical: <b>"+D.crit_count+"</b><br>"+
+             "Total High: <b>"+D.high_count+"</b><br>"+
+             "Critical unassigned: <b>"+D.crit_unasgn+"</b> 🚨<br><br>"+
+             "💡 Assign all <b>"+D.crit_unasgn+" unassigned critical</b> tickets — SLA expires in <b>7 days</b>.";
+    if(/request.?type|type.?breakdown|worst type/.test(ql)){{
+      var rtList=Object.entries(D.rt).map(function(e){{return "• "+e[0]+": <b>"+e[1]+"</b>";}}).join("<br>");
+      return "📊 <b>Request Type Breakdown</b><br>"+rtList+"<br><br>⚠️ Worst SLA: <b>"+D.worst_type+"</b>";
+    }}
+    if(/workload|engineer|team|capacity/.test(ql))
+      return "👷 <b>Team Workload</b><br>"+
+             "Active engineers: <b>"+D.eng_count+"</b><br>"+
+             "Overloaded (&gt;10): <b>"+D.overloaded+"</b><br>"+
+             "Busiest: <b>"+D.top_eng+"</b> ("+D.top_cnt+" tickets)<br>"+
+             "Lightest: <b>"+D.light_eng+"</b> ("+D.light_cnt+" tickets)";
+    return "I can help with:<br>"+
+           "• 👷 <b>Workload</b> — team capacity & engineer load<br>"+
+           "• 📭 <b>Unassigned</b> — tickets without an owner<br>"+
+           "• 🎯 <b>Critical</b> — high-priority ticket status<br>"+
+           "• 📊 <b>Request Types</b> — breakdown & SLA compliance<br>"+
+           "• 📋 <b>Overview</b> — full pipeline summary<br><br>"+
+           "Try: <i>\"Who is overloaded?\"</i> or <i>\"Dashboard overview\"</i>";
+  }}
+
+  function handleQ(q){{
+    var qw=document.getElementById("_acb_qw");if(qw)qw.remove();
+    bubble(q,"user",true);
+    typing();
+    setTimeout(function(){{rmTyping();bubble(answer(q),"bot",true);}},400);
+  }}
+
+  window._acbToggle=function(){{
+    isOpen=!isOpen;
+    var p=document.getElementById("_acb_panel");
+    p.style.display=isOpen?"flex":"none";
+    document.getElementById("_acb_fab").textContent=isOpen?"✕":"💬";
+    sessionStorage.setItem(SK_OPEN,isOpen?"1":"0");
+    if(isOpen&&!welcomed){{
+      welcomed=true;
+      var h=lodH();
+      if(h.length>0){{h.forEach(function(m){{bubble(m.h,m.r,false);}});}}
+      else{{
+        bubble("👋 Hi! I'm your <b>AppSec Chatbot</b>. I have live data on <b>"+
+               D.total.toLocaleString()+" tickets</b> across <b>"+D.eng_count+
+               " engineers</b>.<br>What would you like to know?","bot",true);
+        chips();
+      }}
+    }}
+    if(isOpen){{setTimeout(function(){{inp().focus();}},80);}}
+  }};
+
+  window._acbSend=function(){{
+    var i=inp(),q=i.value.trim();
+    if(!q)return;i.value="";handleQ(q);
+  }};
+
+  // Mark widget so next rerender can detect it and skip re-init
+  document.getElementById("_acb_wrap")._acb_init=function(nd){{D=nd;}};
+
+  // Restore open state across Streamlit rerenders
+  if(sessionStorage.getItem(SK_OPEN)==="1"){{window._acbToggle();}}
+
+}})();
+</script>
+""", unsafe_allow_html=True)
+
+
 def render_sidebar():
     with st.sidebar:
         st.markdown(f"""
@@ -2976,7 +3295,6 @@ def render_sidebar():
             "Unassigned Queue",
             "Ticket Tracker",
             _SEP,               # ← separator / section header (CSS makes it non-clickable)
-            "AI Copilot",
             "Weekly Briefing",
             "ServiceNow Sync",
         ]
@@ -3190,10 +3508,11 @@ def main():
     elif page == "Workload Distribution":  page_workload(df)
     elif page == "Unassigned Queue":       page_unassigned(df)
     elif page == "Ticket Tracker":         page_tracker(df)
-    # SLA & Analytics removed for this phase
-    elif page == "AI Copilot":             page_copilot(df)
     elif page == "Weekly Briefing":        page_briefing(df)
     elif page == "ServiceNow Sync":        page_snow_sync(df)
+
+    # ── Floating chatbot widget — rendered on every page ──────────────────────
+    render_floating_chatbot(df)
 
 
 if __name__ == "__main__":
