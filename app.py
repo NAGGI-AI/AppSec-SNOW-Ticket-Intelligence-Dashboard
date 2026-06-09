@@ -2431,6 +2431,19 @@ def _generate_template_briefing(df: pd.DataFrame, today: datetime) -> str:
     if not actions:
         actions.append("No urgent actions identified. Maintain current assignment cadence.")
 
+    # ── Derived pipeline metrics ────────────────────────────────────────────
+    open_tickets  = pending + clarify
+    closed_pct    = closed / total * 100 if total else 0
+    group_count   = len([g for g in [CSAPPSEC_GRP, ITSSDLC_GRP, CSSDLC_GRP]
+                         if len(df[df["Primary Group"] == g]) > 0])
+    eng_count_all = int(df[df["Assigned To Clean"] != ""]["Assigned To Clean"].nunique())
+
+    pipeline_status = (
+        "⚠️ Attention Required" if (crit_unasgn > 0 or overloaded > 5)
+        else ("🟡 Moderate Load" if (unassigned > 10 or overloaded > 0)
+              else "🟢 Within Capacity")
+    )
+
     # ── Build report ──────────────────────────────────────────────────────────
     lines = [
         f"# AppSec Weekly Intelligence Briefing",
@@ -2441,12 +2454,34 @@ def _generate_template_briefing(df: pd.DataFrame, today: datetime) -> str:
         f"",
         f"## 1. Executive Summary",
         f"",
-        f"The AppSec operations pipeline currently holds **{total:,} tickets** with an overall "
-        f"SLA compliance health of **{health_icon} {health}** ({breach_pct:.1f}% breach rate). "
-        f"There are **{unassigned} unassigned tickets** ({crit_unasgn} Critical, {high_unasgn} High) "
-        f"requiring immediate triage. "
-        + (f"Workload is unevenly distributed with {overloaded} engineer(s) overloaded."
-           if overloaded > 0 else "Engineer workload is within acceptable range."),
+        f"**Pipeline Status: {pipeline_status}**",
+        f"",
+        f"This week, the AppSec operations pipeline holds **{total:,} tickets** across "
+        f"**{eng_count_all} active engineers** in {group_count} support group(s).",
+        f"",
+        f"Of the total pipeline, **{open_tickets} tickets remain active** — "
+        f"**{pending}** are Pending Review and **{clarify}** are In Progress / Sent for Clarification. "
+        f"**{closed} tickets ({closed_pct:.0f}%)** have been resolved (Closed) this period.",
+        f"",
+    ]
+
+    if crit_unasgn > 0 or high_unasgn > 0:
+        lines.append(
+            f"⚠️ **Immediate attention required:** **{crit_unasgn} Critical** and "
+            f"**{high_unasgn} High** priority tickets are unassigned. "
+            f"Critical tickets carry a 7-day SLA and must be assigned without delay.")
+    else:
+        lines.append(f"✅ No unassigned Critical or High priority tickets this week.")
+
+    lines += [
+        f"",
+        (f"👷 **Capacity concern:** {overloaded} engineer(s) are carrying >10 tickets. "
+         f"The heaviest load is with **{top_eng}** ({top_eng_cnt} tickets). "
+         f"**{light_eng}** ({light_cnt} tickets) has the most available capacity."
+         if overloaded > 0
+         else f"✅ Engineer workload is within acceptable range. "
+              f"Most loaded: **{top_eng}** ({top_eng_cnt} tickets). "
+              f"Most available: **{light_eng}** ({light_cnt} tickets)."),
         f"",
         f"---",
         f"",
@@ -2488,75 +2523,68 @@ def _generate_template_briefing(df: pd.DataFrame, today: datetime) -> str:
         f"",
         f"| Status | Count | % of Total |",
         f"|--------|-------|------------|",
-        f"| New / Pending for Review | {pending} | {pending/total*100:.0f}% |",
-        f"| In Progress / Sent for Clarification | {clarify} | {clarify/total*100:.0f}% |",
-        f"| Approved / Closed | {closed} | {closed/total*100:.0f}% |",
-        f"| Cancelled / Rejected | {rejected} | {rejected/total*100:.0f}% |",
-        f"| **Total** | **{total}** | 100% |",
+        f"| 🕐 New / Pending Review | {pending} | {pending/total*100:.0f}% |",
+        f"| 💬 In Progress / Clarification | {clarify} | {clarify/total*100:.0f}% |",
+        f"| ✅ Approved / Closed | {closed} | {closed/total*100:.0f}% |",
+        f"| ❌ Cancelled / Rejected | {rejected} | {rejected/total*100:.0f}% |",
+        f"| **Total** | **{total}** | **100%** |",
+    ]
+
+    lines += [
+        f"",
+        f"---",
+        f"",
+        f"## 4. Workload & Capacity",
+        f"",
+        f"| Metric | Value |",
+        f"|--------|-------|",
+        f"| Total active (open) tickets | {open_tickets} |",
+        f"| Unassigned tickets | {unassigned} ({crit_unasgn} Critical · {high_unasgn} High) |",
+        f"| Active engineers | {eng_count_all} |",
+        f"| Overloaded engineers (>10 tickets) | {overloaded} |",
+        f"| Optimal load engineers (≤5 tickets) | {optimal} |",
+        f"| Most loaded engineer | {top_eng} ({top_eng_cnt} tickets) |",
+        f"| Best available for assignment | {light_eng} ({light_cnt} tickets) |",
+        f"",
+        f"**Average age of open tickets:** {avg_open:.1f} days &nbsp;|&nbsp; "
+        f"**Avg. resolution time (closed):** {avg_res:.1f} days",
         f"",
         f"**Top request types by volume:**",
     ]
     for rt, cnt in top_types.items():
-        pct = cnt/total*100
+        pct = cnt / total * 100
         lines.append(f"- {rt}: **{cnt}** ({pct:.0f}%)")
 
     lines += [
         f"",
         f"---",
         f"",
-        f"## 4. SLA Performance",
-        f"",
-        f"- **Overall breach rate:** {breach_pct:.1f}% — **{breached}** breached, "
-        f"**{on_time}** on-time",
-        f"- **Average days open (all tickets):** {avg_open:.1f} days",
-        f"- **Average resolution time (closed):** {avg_res:.1f} days",
-        f"",
-        f"**SLA compliance by priority:**",
-        f"",
-        f"| Priority | SLA Threshold | Total | Breached | Compliance |",
-        f"|----------|---------------|-------|----------|------------|",
-    ]
-    thresholds = {"Critical": "7d", "High": "14d", "Medium": "21d", "Low": "30d"}
-    for prio in ["Critical", "High", "Medium", "Low"]:
-        if prio in sla_df.index:
-            t  = int(sla_df.loc[prio, "Total"])
-            b  = int(sla_df.loc[prio, "Breached"])
-            ok = t - b
-            cp = ok/t*100 if t else 100
-            icon = "🔴" if cp < 60 else ("🟡" if cp < 80 else "🟢")
-            lines.append(f"| {icon} {prio} | {thresholds[prio]} | {t} | {b} | {cp:.0f}% |")
-
-    lines += [
-        f"",
-        f"**Most breached request type:** {worst_type} ({int(breach_by_type.iloc[0]) if not breach_by_type.empty else 0} breaches)",
-        f"",
-        f"---",
-        f"",
-        f"## 5. Workload & Capacity",
-        f"",
-        f"- **Unassigned tickets:** {unassigned} total ({crit_unasgn} Critical, {high_unasgn} High)",
-        f"- **Overloaded engineers (>10 tickets):** {overloaded}",
-        f"- **Optimal load engineers (≤5 tickets):** {optimal}",
-        f"- **Most loaded:** {top_eng} ({top_eng_cnt} tickets)",
-        f"- **Available capacity:** {light_eng} ({light_cnt} tickets — best for new assignments)",
-        f"",
-        f"---",
-        f"",
-        f"## 6. Top Risks This Week",
+        f"## 5. Top Risks This Week",
         f"",
     ]
     risks = []
     if crit_unasgn > 0:
-        risks.append(f"**{crit_unasgn} unassigned Critical tickets** — each has a 7-day SLA, "
-                     f"immediate assignment required.")
-    if breach_pct > 30:
-        risks.append(f"**SLA breach rate at {breach_pct:.1f}%** — above acceptable threshold. "
-                     f"Escalation risk if not addressed this week.")
+        risks.append(
+            f"**{crit_unasgn} unassigned Critical ticket(s)** — 7-day SLA. "
+            f"Assign immediately to available engineer ({light_eng}, {light_cnt} tickets).")
+    if high_unasgn > 0:
+        risks.append(
+            f"**{high_unasgn} unassigned High ticket(s)** — 14-day SLA window. "
+            f"Must be assigned before end of week.")
     if overloaded > 0:
-        risks.append(f"**{overloaded} engineers are overloaded** — burnout and ticket quality "
-                     f"risk. Rebalancing needed.")
-    risks.append(f"**{worst_type}** continues to accumulate SLA breaches — "
-                 f"review resourcing for this type.")
+        risks.append(
+            f"**{overloaded} engineer(s) carrying >10 tickets** — capacity and quality risk. "
+            f"Redistribution to {optimal} optimal-load engineer(s) recommended.")
+    if worst_type and worst_type != "N/A":
+        risks.append(
+            f"**{worst_type}** has the highest volume of open/aging tickets — "
+            f"review resource allocation for this type.")
+    if pending > (total * 0.10):
+        risks.append(
+            f"**{pending} tickets ({pending/total*100:.0f}%)** remain in Pending Review — "
+            f"review triage cadence to prevent queue buildup.")
+    if not risks:
+        risks.append("No urgent risks identified. Maintain current assignment cadence.")
     for i, r in enumerate(risks, 1):
         lines.append(f"{i}. {r}")
 
@@ -2564,7 +2592,7 @@ def _generate_template_briefing(df: pd.DataFrame, today: datetime) -> str:
         f"",
         f"---",
         f"",
-        f"## 7. Recommended Actions",
+        f"## 6. Recommended Actions",
         f"",
     ]
     for i, a in enumerate(actions, 1):
@@ -2591,19 +2619,21 @@ def page_briefing(df: pd.DataFrame):
 
     # ── KPI preview ────────────────────────────────────────────────────────────
     total      = len(df)
-    breached   = int(df["SLA Breached"].sum())
-    breach_pct = breached / total * 100 if total else 0
+    pending    = int((df["State"] == "Pending for Review").sum())
+    clarify    = int((df["State"] == "Sent for Clarification").sum())
+    active_t   = pending + clarify
     unassigned = int((df["Assigned To Clean"] == "").sum())
     crit_unasgn= int(((df["Assigned To Clean"] == "") & (df["Priority"] == "Critical")).sum())
     eng_load   = (df[df["Assigned To Clean"] != ""]
                   .groupby("Assigned To Clean").size())
     overloaded = int((eng_load > 10).sum())
+    eng_count_b = int(df[df["Assigned To Clean"] != ""]["Assigned To Clean"].nunique())
 
     render_kpis([
-        (f"{total:,}",         "Total Tickets",    NEON_BLUE,   "📋", ""),
-        (f"{breach_pct:.1f}%", "SLA Breach Rate",  NEON_RED,    "🚨", f"{breached} tickets"),
-        (f"{unassigned:,}",    "Unassigned",        NEON_ORANGE, "📭", f"{crit_unasgn} critical"),
-        (f"{overloaded:,}",    "Overloaded Eng.",   NEON_RED,    "⚠️",  ">10 tickets each"),
+        (f"{total:,}",      "Total Tickets",   NEON_BLUE,   "📋", ""),
+        (f"{active_t:,}",   "Active (Open)",   NEON_ORANGE, "🕐", f"{pending} pending · {clarify} in progress"),
+        (f"{unassigned:,}", "Unassigned",       NEON_RED,    "📭", f"{crit_unasgn} critical"),
+        (f"{overloaded:,}", "Overloaded Eng.",  NEON_RED,    "⚠️",  ">10 tickets each"),
     ])
 
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
@@ -3127,16 +3157,8 @@ def render_floating_chatbot(df: pd.DataFrame):
 (function(){{
   // Remove any stale widget from previous Streamlit render
   var old=document.getElementById("_acb_wrap");
-  if(old && old._acb_init){{ old._acb_init({{
-    total:{total},pending:{pending},clarify:{clarify},closed:{closed},
-    rejected:{rejected},unassigned:{unassigned},breached:{breached},
-    breach_pct:{breach_pct},eng_count:{eng_count},
-    top_eng:"{top_eng}",top_cnt:{top_cnt},
-    light_eng:"{light_eng}",light_cnt:{light_cnt},
-    overloaded:{overloaded},crit_count:{crit_count},high_count:{high_count},
-    crit_unasgn:{crit_unasgn},worst_type:"{worst_type}",rt:{rt_json},
-    eng_list:{eng_list_json},group:"ITIT-CSAppSec-Global-Support-L1"
-  }}); return; }}
+  // Always remove stale widget so fresh data + correct storage key are used
+  if(old) old.remove();
 
   var D={{
     total:{total},pending:{pending},clarify:{clarify},closed:{closed},
@@ -3323,8 +3345,8 @@ def render_floating_chatbot(df: pd.DataFrame):
     if(!q)return;i.value="";handleQ(q);
   }};
 
-  // Mark widget so next rerender can detect it and skip re-init
-  document.getElementById("_acb_wrap")._acb_init=function(nd){{D=nd;}};
+  // Mark widget so next rerender knows a widget exists (used for remove above)
+  document.getElementById("_acb_wrap")._acb_ready=true;
 
   // Restore open state across Streamlit rerenders
   if(sessionStorage.getItem(SK_OPEN)==="1"){{window._acbToggle();}}
