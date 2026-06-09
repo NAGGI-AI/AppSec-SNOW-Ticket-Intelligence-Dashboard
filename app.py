@@ -2955,7 +2955,13 @@ def render_floating_chatbot(df: pd.DataFrame):
     if df is None or df.empty:
         return
 
-    # ── Compute live metrics to inject as JS constants ─────────────────────────
+    # ── Restrict data to ITIT-CSAppSec-Global-Support-L1 only ────────────────
+    CHAT_GROUP = "ITIT-CSAppSec-Global-Support-L1"
+    df = df[df["Primary Group"] == CHAT_GROUP].copy()
+    if df.empty:
+        return  # No data for this group yet — don't render widget
+
+    # ── Compute live metrics (CSAppSec group only) ────────────────────────────
     total      = len(df)
     pending    = int((df["State"] == "Pending for Review").sum())
     clarify    = int((df["State"] == "Sent for Clarification").sum())
@@ -2974,6 +2980,12 @@ def render_floating_chatbot(df: pd.DataFrame):
     light_cnt  = int(eng_load.iloc[-1])               if not eng_load.empty else 0
     overloaded = int((eng_load > 10).sum())
 
+    # Full sorted engineer list for the group
+    eng_list_json = json.dumps(
+        [{"name": str(n).replace('"', "'"), "tickets": int(c)}
+         for n, c in eng_load.items()]
+    )
+
     pvc         = df["Priority"].value_counts()
     crit_count  = int(pvc.get("Critical", 0))
     high_count  = int(pvc.get("High", 0))
@@ -2984,6 +2996,12 @@ def render_floating_chatbot(df: pd.DataFrame):
 
     btype      = df[df["SLA Breached"]]["Request Type"].replace("", "Unknown").value_counts()
     worst_type = str(btype.index[0]).replace('"', "'") if not btype.empty else "N/A"
+
+    # ── Fingerprint: invalidates sessionStorage cache when CSV changes ────────
+    # If the user uploads a new CSV the total+engineer count changes → old
+    # chat history is abandoned and a fresh welcome message appears.
+    fp       = hashlib.md5(f"{total}_{eng_count}_{top_eng}".encode()).hexdigest()[:10]
+    sk_hist  = f"acb_h_{fp}"   # unique per data snapshot
 
     # ── Inject widget HTML + CSS + JS via st.markdown ─────────────────────────
     # position:fixed is relative to the viewport (not the iframe) because
@@ -3116,7 +3134,8 @@ def render_floating_chatbot(df: pd.DataFrame):
     top_eng:"{top_eng}",top_cnt:{top_cnt},
     light_eng:"{light_eng}",light_cnt:{light_cnt},
     overloaded:{overloaded},crit_count:{crit_count},high_count:{high_count},
-    crit_unasgn:{crit_unasgn},worst_type:"{worst_type}",rt:{rt_json}
+    crit_unasgn:{crit_unasgn},worst_type:"{worst_type}",rt:{rt_json},
+    eng_list:{eng_list_json},group:"ITIT-CSAppSec-Global-Support-L1"
   }}); return; }}
 
   var D={{
@@ -3126,10 +3145,11 @@ def render_floating_chatbot(df: pd.DataFrame):
     top_eng:"{top_eng}",top_cnt:{top_cnt},
     light_eng:"{light_eng}",light_cnt:{light_cnt},
     overloaded:{overloaded},crit_count:{crit_count},high_count:{high_count},
-    crit_unasgn:{crit_unasgn},worst_type:"{worst_type}",rt:{rt_json}
+    crit_unasgn:{crit_unasgn},worst_type:"{worst_type}",rt:{rt_json},
+    eng_list:{eng_list_json},group:"ITIT-CSAppSec-Global-Support-L1"
   }};
 
-  var SK_HIST="acb_hist_v1", SK_OPEN="acb_open";
+  var SK_HIST="{sk_hist}", SK_OPEN="acb_open";
   var isOpen=false, welcomed=false;
 
   function savH(h){{try{{sessionStorage.setItem(SK_HIST,JSON.stringify(h));}}catch(e){{}}}}
@@ -3157,9 +3177,9 @@ def render_floating_chatbot(df: pd.DataFrame):
 
   function chips(){{
     var qs=[
-      ["👷","Lightest workload"],["🔴","Most overloaded engineer"],
-      ["📭","Unassigned tickets"],["🎯","Critical ticket status"],
-      ["📋","Dashboard overview"],["📊","Request type breakdown"]
+      ["👥","List all engineers"],["🔴","Most overloaded engineer"],
+      ["👷","Lightest workload"],["📭","Unassigned tickets"],
+      ["🎯","Critical ticket status"],["📋","Dashboard overview"]
     ];
     var w=document.createElement("div");
     var lbl=document.createElement("div");
@@ -3177,25 +3197,57 @@ def render_floating_chatbot(df: pd.DataFrame):
 
   function answer(q){{
     var ql=q.toLowerCase();
-    if(/overload|heaviest|busiest|most ticket/.test(ql))
-      return "🔴 <b>Most Overloaded Engineer</b><br><b>"+D.top_eng+"</b> — <b>"+D.top_cnt+" tickets</b><br>"+
-             "⚠️ <b>"+D.overloaded+"</b> engineer(s) overloaded (&gt;10 tickets).<br><br>"+
-             "💡 Redistribute tickets to engineers with lighter load.";
-    if(/light|least|fewest|available/.test(ql))
-      return "👷 <b>Lightest Workload</b><br><b>"+D.light_eng+"</b> — <b>"+D.light_cnt+"</b> ticket(s).<br><br>"+
-             "💡 Ideal candidate for new critical ticket assignments.";
+
+    // Engineer list
+    if(/list.*(engineer|team)|who.*(engineer|team)|engineer.*(list|all|name)|show.*engineer/.test(ql)){{
+      var rows=D.eng_list.map(function(e,i){{
+        var bar=e.tickets>10?"🔴":e.tickets>5?"🟡":"🟢";
+        return (i+1)+". "+bar+" <b>"+e.name+"</b> — "+e.tickets+" ticket(s)";
+      }}).join("<br>");
+      return "👷 <b>Engineers — "+D.group+"</b><br>"+
+             "<span style='font-size:.76rem;color:#94a3b8'>"+D.eng_count+" active engineers</span><br><br>"+
+             rows;
+    }}
+
+    // Overloaded / busiest
+    if(/overload|heaviest|busiest|most ticket/.test(ql)){{
+      var top3=D.eng_list.slice(0,3).map(function(e){{
+        return "🔴 <b>"+e.name+"</b> — "+e.tickets+" tickets";
+      }}).join("<br>");
+      return "🔴 <b>Most Overloaded — "+D.group+"</b><br>"+top3+"<br><br>"+
+             "⚠️ <b>"+D.overloaded+"</b> engineer(s) above 10-ticket threshold.<br>"+
+             "💡 Redistribute from top engineers to those with fewer assignments.";
+    }}
+
+    // Lightest workload
+    if(/light|least|fewest|available/.test(ql)){{
+      var bot3=D.eng_list.slice(-3).reverse().map(function(e){{
+        return "🟢 <b>"+e.name+"</b> — "+e.tickets+" ticket(s)";
+      }}).join("<br>");
+      return "👷 <b>Lightest Workload — "+D.group+"</b><br>"+bot3+"<br><br>"+
+             "💡 Ideal candidates for new critical ticket assignments.";
+    }}
+
+    // Unassigned
     if(/unassign|triage|no engineer|without/.test(ql))
-      return "📭 <b>Unassigned Tickets</b><br>Total unassigned: <b>"+D.unassigned+"</b><br>"+
+      return "📭 <b>Unassigned Tickets — "+D.group+"</b><br>"+
+             "Total unassigned: <b>"+D.unassigned+"</b><br>"+
              "Critical unassigned: <b>"+D.crit_unasgn+"</b> 🚨<br><br>"+
              "💡 Assign the <b>"+D.crit_unasgn+" critical</b> unassigned tickets immediately — SLA is only <b>7 days</b>.";
+
+    // SLA
     if(/sla|breach|compliance|overdue/.test(ql)){{
       var s=D.breach_pct>40?"🔴 CRITICAL":D.breach_pct>20?"🟡 AT RISK":"🟢 HEALTHY";
-      return "🚨 <b>SLA Status: "+s+"</b><br>Breach rate: <b>"+D.breach_pct+"%</b> ("+D.breached+" tickets)<br>"+
+      return "🚨 <b>SLA Status: "+s+"</b><br>"+
+             "Group: <b>"+D.group+"</b><br>"+
+             "Breach rate: <b>"+D.breach_pct+"%</b> ("+D.breached+" tickets)<br>"+
              "Worst type: <b>"+D.worst_type+"</b><br><br>"+
              "Thresholds: Critical=7d · High=14d · Medium=21d · Low=30d";
     }}
+
+    // Overview / summary
     if(/overview|summary|status|dashboard|pipeline/.test(ql))
-      return "📋 <b>Dashboard Overview</b><br>"+
+      return "📋 <b>Overview — "+D.group+"</b><br>"+
              "📊 Total: <b>"+D.total.toLocaleString()+"</b><br>"+
              "🕐 Pending Review: <b>"+D.pending+"</b><br>"+
              "💬 Sent for Clarification: <b>"+D.clarify+"</b><br>"+
@@ -3203,29 +3255,38 @@ def render_floating_chatbot(df: pd.DataFrame):
              "❌ Rejected: <b>"+D.rejected+"</b><br>"+
              "⚠️ Unassigned: <b>"+D.unassigned+"</b><br>"+
              "👷 Active Engineers: <b>"+D.eng_count+"</b>";
+
+    // Critical
     if(/critical|urgent|high.?priority/.test(ql))
-      return "🎯 <b>Critical Ticket Status</b><br>"+
+      return "🎯 <b>Critical Status — "+D.group+"</b><br>"+
              "Total Critical: <b>"+D.crit_count+"</b><br>"+
              "Total High: <b>"+D.high_count+"</b><br>"+
              "Critical unassigned: <b>"+D.crit_unasgn+"</b> 🚨<br><br>"+
              "💡 Assign all <b>"+D.crit_unasgn+" unassigned critical</b> tickets — SLA expires in <b>7 days</b>.";
+
+    // Request type
     if(/request.?type|type.?breakdown|worst type/.test(ql)){{
       var rtList=Object.entries(D.rt).map(function(e){{return "• "+e[0]+": <b>"+e[1]+"</b>";}}).join("<br>");
-      return "📊 <b>Request Type Breakdown</b><br>"+rtList+"<br><br>⚠️ Worst SLA: <b>"+D.worst_type+"</b>";
+      return "📊 <b>Request Types — "+D.group+"</b><br>"+rtList+"<br><br>⚠️ Worst SLA: <b>"+D.worst_type+"</b>";
     }}
+
+    // Workload / team
     if(/workload|engineer|team|capacity/.test(ql))
-      return "👷 <b>Team Workload</b><br>"+
+      return "👷 <b>Team Workload — "+D.group+"</b><br>"+
              "Active engineers: <b>"+D.eng_count+"</b><br>"+
-             "Overloaded (&gt;10): <b>"+D.overloaded+"</b><br>"+
+             "Overloaded (&gt;10 tickets): <b>"+D.overloaded+"</b><br>"+
              "Busiest: <b>"+D.top_eng+"</b> ("+D.top_cnt+" tickets)<br>"+
-             "Lightest: <b>"+D.light_eng+"</b> ("+D.light_cnt+" tickets)";
-    return "I can help with:<br>"+
-           "• 👷 <b>Workload</b> — team capacity & engineer load<br>"+
+             "Lightest: <b>"+D.light_eng+"</b> ("+D.light_cnt+" tickets)<br><br>"+
+             "💡 Ask <i>\"List all engineers\"</i> for the full breakdown.";
+
+    return "I can help with data for <b>"+D.group+"</b>:<br><br>"+
+           "• 👷 <b>List engineers</b> — all engineers with ticket counts<br>"+
+           "• 🔴 <b>Overloaded</b> — who has the most tickets<br>"+
            "• 📭 <b>Unassigned</b> — tickets without an owner<br>"+
            "• 🎯 <b>Critical</b> — high-priority ticket status<br>"+
-           "• 📊 <b>Request Types</b> — breakdown & SLA compliance<br>"+
+           "• 📊 <b>Request types</b> — breakdown & SLA<br>"+
            "• 📋 <b>Overview</b> — full pipeline summary<br><br>"+
-           "Try: <i>\"Who is overloaded?\"</i> or <i>\"Dashboard overview\"</i>";
+           "Try: <i>\"List all engineers\"</i> or <i>\"Who is overloaded?\"</i>";
   }}
 
   function handleQ(q){{
@@ -3246,9 +3307,11 @@ def render_floating_chatbot(df: pd.DataFrame):
       var h=lodH();
       if(h.length>0){{h.forEach(function(m){{bubble(m.h,m.r,false);}});}}
       else{{
-        bubble("👋 Hi! I'm your <b>AppSec Chatbot</b>. I have live data on <b>"+
-               D.total.toLocaleString()+" tickets</b> across <b>"+D.eng_count+
-               " engineers</b>.<br>What would you like to know?","bot",true);
+        bubble("👋 Hi! I'm your <b>AppSec Chatbot</b> for<br>"+
+               "<b>"+D.group+"</b><br><br>"+
+               "Live data: <b>"+D.total.toLocaleString()+" tickets</b> across "+
+               "<b>"+D.eng_count+" engineers</b>.<br>What would you like to know?",
+               "bot",true);
         chips();
       }}
     }}
