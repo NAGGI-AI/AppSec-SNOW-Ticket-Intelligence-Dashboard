@@ -10,3 +10,7 @@ gatherUsageStats = false
 
 [server]
 headless = true
+enableCORS = false
+enableXsrfProtection = false
+enableWebsocketCompression = false
+maxUploadSize = 50
